@@ -1,0 +1,10 @@
+# For compatibility
+numpy<2.3
+
+# Core dependencies
+torch
+librosa
+soundfile
+accelerate
+mistral-common
+transformers

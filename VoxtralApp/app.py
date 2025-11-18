@@ -7,6 +7,8 @@ Cross-platform compatible (Windows & macOS)
 import gc
 import logging
 import os
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -758,6 +760,98 @@ def check_updates():
     except Exception as e:
         logger.error(f"Error checking for updates: {e}")
         return jsonify({"update_available": False, "current_version": get_current_version(), "error": str(e)}), 500
+
+
+@app.route("/api/updates/install", methods=["POST"])
+def install_update():
+    """Install available update from GitHub."""
+    try:
+        logger.info("Starting automatic update process...")
+
+        # Check if running from git repository
+        git_dir = BASE_DIR.parent / ".git"
+        if not git_dir.exists():
+            return jsonify({
+                "status": "error",
+                "message": "Not a git repository. Please update manually by downloading the latest release."
+            }), 400
+
+        # Determine Python executable and pip based on platform
+        if sys.platform == "win32":
+            # Windows
+            python_exe = BASE_DIR / "voxtral_env" / "Scripts" / "python.exe"
+            pip_exe = BASE_DIR / "voxtral_env" / "Scripts" / "pip.exe"
+        else:
+            # Mac/Linux
+            python_exe = BASE_DIR / "voxtral_env" / "bin" / "python"
+            pip_exe = BASE_DIR / "voxtral_env" / "bin" / "pip"
+
+        # Step 1: Run git pull
+        logger.info("Pulling latest changes from GitHub...")
+        git_result = subprocess.run(
+            ["git", "pull"],
+            cwd=str(BASE_DIR.parent),
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if git_result.returncode != 0:
+            error_msg = f"Git pull failed: {git_result.stderr}"
+            logger.error(error_msg)
+            return jsonify({"status": "error", "message": error_msg}), 500
+
+        logger.info(f"Git pull output: {git_result.stdout}")
+
+        # Check if anything was updated
+        if "Already up to date" in git_result.stdout or "Already up-to-date" in git_result.stdout:
+            return jsonify({
+                "status": "success",
+                "message": "Already up to date. No changes to install.",
+                "updated": False
+            })
+
+        # Step 2: Update dependencies
+        logger.info("Updating dependencies...")
+        requirements_file = BASE_DIR / "requirements.txt"
+
+        if requirements_file.exists():
+            pip_result = subprocess.run(
+                [str(pip_exe), "install", "-r", str(requirements_file), "--upgrade"],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+
+            if pip_result.returncode != 0:
+                logger.warning(f"Pip install warnings: {pip_result.stderr}")
+                # Don't fail on pip warnings, just log them
+
+        logger.info("Update completed successfully!")
+
+        # Schedule restart after a brief delay
+        def restart_app():
+            time.sleep(2)  # Give time for response to be sent
+            logger.info("Restarting application...")
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        restart_thread = threading.Thread(target=restart_app, daemon=True)
+        restart_thread.start()
+
+        return jsonify({
+            "status": "success",
+            "message": "Update installed successfully. Application will restart in 2 seconds...",
+            "updated": True
+        })
+
+    except subprocess.TimeoutExpired:
+        error_msg = "Update process timed out"
+        logger.error(error_msg)
+        return jsonify({"status": "error", "message": error_msg}), 500
+    except Exception as e:
+        error_msg = f"Error installing update: {str(e)}"
+        logger.error(error_msg)
+        return jsonify({"status": "error", "message": error_msg}), 500
 
 
 # WebSocket events

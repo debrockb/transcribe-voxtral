@@ -46,6 +46,7 @@ const elements = {
     closeMemoryBanner: document.getElementById('closeMemoryBanner'),
     updateBanner: document.getElementById('updateBanner'),
     updateBannerMessage: document.getElementById('updateBannerMessage'),
+    installUpdateBtn: document.getElementById('installUpdateBtn'),
     viewReleaseBtn: document.getElementById('viewReleaseBtn'),
     closeUpdateBanner: document.getElementById('closeUpdateBanner'),
     checkUpdateBtn: document.getElementById('checkUpdateBtn'),
@@ -105,6 +106,11 @@ function setupEventListeners() {
         elements.closeUpdateBanner.addEventListener('click', () => {
             elements.updateBanner.style.display = 'none';
         });
+    }
+
+    // Install update button
+    if (elements.installUpdateBtn) {
+        elements.installUpdateBtn.addEventListener('click', installUpdate);
     }
 
     // Manual update check
@@ -473,6 +479,61 @@ async function manualUpdateCheck() {
     } catch (error) {
         console.error('Update check failed:', error);
         showToast('Failed to check for updates. Please try again later.', 'error');
+    }
+}
+
+/**
+ * Install available update
+ * Downloads and installs the latest version from GitHub
+ */
+async function installUpdate() {
+    try {
+        // Disable the button to prevent double-clicks
+        const btn = elements.installUpdateBtn;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Installing...';
+
+        showToast('Starting update installation...', 'info');
+
+        const response = await fetch('/api/updates/install', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            if (data.updated) {
+                showToast('Update installed! Application restarting...', 'success');
+                // Hide the update banner
+                elements.updateBanner.style.display = 'none';
+
+                // Show a modal or overlay to inform user about restart
+                setTimeout(() => {
+                    showToast('Restarting application...', 'info');
+                    // The server will restart, which will disconnect the socket
+                    // The page should automatically reconnect when server is back
+                }, 1000);
+            } else {
+                showToast(data.message || 'Already up to date', 'info');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        } else {
+            throw new Error(data.message || 'Failed to install update');
+        }
+    } catch (error) {
+        console.error('Update installation failed:', error);
+        showToast(`Update failed: ${error.message}`, 'error');
+
+        // Re-enable button
+        if (elements.installUpdateBtn) {
+            elements.installUpdateBtn.disabled = false;
+            elements.installUpdateBtn.textContent = 'Update Now';
+        }
     }
 }
 

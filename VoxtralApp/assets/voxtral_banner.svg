@@ -1,38 +1,39 @@
-<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Voxtral Transcription</title>
-  <desc id="desc">Soft ivory and amber banner illustrating the Voxtral transcription workflow.</desc>
+<svg width="1200" height="520" viewBox="0 0 1200 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Voxtral privacy banner</title>
+  <desc id="desc">Minimal hero graphic highlighting Voxtral's on-device privacy benefits.</desc>
   <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFF9EF"/>
-      <stop offset="55%" stop-color="#F4F0FF"/>
-      <stop offset="100%" stop-color="#EBF2FF"/>
+      <stop offset="50%" stop-color="#F5F2FF"/>
+      <stop offset="100%" stop-color="#ECF1FF"/>
     </linearGradient>
-    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#F4A23C" stop-opacity="0.85"/>
-      <stop offset="100%" stop-color="#7C76FF" stop-opacity="0.2"/>
+    <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F5B16E" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#CDB8FF" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="pill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(26,24,68,0.08)"/>
+      <stop offset="100%" stop-color="rgba(26,24,68,0.02)"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="630" fill="url(#bgGradient)" rx="36"/>
-  <g opacity="0.35" transform="translate(-40,-20)">
-    <circle cx="220" cy="140" r="120" fill="#FFE9CF"/>
-    <circle cx="480" cy="80" r="70" fill="#FCE4B9"/>
-    <circle cx="980" cy="520" r="150" fill="#E1E5FF"/>
+  <rect width="1200" height="520" rx="48" fill="url(#bg)"/>
+  <g opacity="0.3">
+    <circle cx="180" cy="110" r="80" fill="#FFEED8"/>
+    <circle cx="460" cy="70" r="60" fill="#FDE3BA"/>
+    <circle cx="1020" cy="420" r="120" fill="#E7E8FF"/>
   </g>
-  <path d="M0 470 C180 440 230 520 420 500 C620 480 660 540 860 520 C1050 502 1100 560 1200 540 L1200 650 L0 650 Z" fill="url(#waveGradient)" opacity="0.7"/>
-  <g transform="translate(120 140)" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#1A1844">
-    <text font-size="54" font-weight="700" letter-spacing="0.04em">VOXTRAL TRANSCRIPTION</text>
-    <text y="76" font-size="26" fill="#5D5C76">Simply Bastiaan · Local-first transcription studio</text>
+  <path d="M0 370 C200 350 300 410 520 390 C720 372 820 430 1020 410 C1130 398 1180 420 1200 430 L1200 520 L0 520 Z" fill="url(#wave)" opacity="0.55"/>
+  <g transform="translate(120 120)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844">
+    <text font-size="20" letter-spacing="0.2em" fill="#5D5C76">SIMPLY BASTIAAN · LOCAL-FIRST TRANSCRIPTION</text>
+    <text y="120" font-size="84" font-weight="700">Record. Transcribe. Save time.</text>
   </g>
-  <g transform="translate(120 290)" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#1A1844">
-    <text font-size="92" font-weight="700">Record. Transcribe. Save time.</text>
+  <g transform="translate(120 280)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844" font-size="26">
+    <text>On-device application</text>
+    <text x="360">Full data ownership</text>
+    <text x="720">No cloud, ever</text>
   </g>
-  <g transform="translate(120 400)" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#5D5C76">
-    <text font-size="30">• On-device application</text>
-    <text x="360" font-size="30">• Full data ownership</text>
-    <text x="720" font-size="30">• No cloud, ever</text>
-  </g>
-  <g transform="translate(120 500)" font-family="'Space Mono', 'Fira Code', 'Courier New', monospace">
-    <rect width="560" height="70" rx="22" fill="rgba(26,24,68,0.08)" stroke="rgba(26,24,68,0.18)"/>
-    <text x="40" y="44" font-size="26" fill="#1A1844">$ python transcribe_voxtral.py</text>
+  <g transform="translate(120 360)" font-family="'Space Mono','Fira Code',monospace">
+    <rect width="360" height="62" rx="20" fill="url(#pill)" stroke="rgba(26,24,68,0.12)"/>
+    <text x="26" y="40" font-size="24" fill="#1A1844">$ python transcribe_voxtral.py</text>
   </g>
 </svg>

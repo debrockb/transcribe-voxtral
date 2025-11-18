@@ -274,7 +274,8 @@ async function initializeSelectedModel() {
         const response = await fetch('/api/model/initialize', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Voxtral-Request': 'voxtral-web-ui'
             },
             body: JSON.stringify({
                 version: state.selectedModel.id
@@ -499,7 +500,8 @@ async function installUpdate() {
         const response = await fetch('/api/updates/install', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Voxtral-Request': 'voxtral-web-ui'
             }
         });
 
@@ -1030,7 +1032,10 @@ async function deleteTranscription(filename) {
 
     try {
         const response = await fetch(`/api/history/transcriptions/${encodeURIComponent(filename)}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'X-Voxtral-Request': 'voxtral-web-ui'
+            }
         });
 
         if (response.ok) {
@@ -1051,7 +1056,10 @@ async function deleteUpload(filename) {
 
     try {
         const response = await fetch(`/api/history/uploads/${encodeURIComponent(filename)}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'X-Voxtral-Request': 'voxtral-web-ui'
+            }
         });
 
         if (response.ok) {
@@ -1073,7 +1081,10 @@ if (historyElements.deleteAllTranscriptions) {
 
         try {
             const response = await fetch('/api/history/transcriptions/all', {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'X-Voxtral-Request': 'voxtral-web-ui'
+                }
             });
 
             const data = await response.json();
@@ -1098,7 +1109,10 @@ if (historyElements.deleteAllUploads) {
 
         try {
             const response = await fetch('/api/history/uploads/all', {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'X-Voxtral-Request': 'voxtral-web-ui'
+                }
             });
 
             const data = await response.json();

@@ -7,6 +7,7 @@ Cross-platform compatible (Windows & macOS)
 import gc
 import logging
 import os
+import secrets
 import subprocess
 import sys
 import threading
@@ -16,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 import psutil
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, render_template, request, send_file, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
@@ -38,9 +39,12 @@ OUTPUT_FOLDER.mkdir(exist_ok=True)
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "voxtral-transcription-secret-key"
+# Generate a random secret key on startup for session security
+app.config["SECRET_KEY"] = secrets.token_hex(32)
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
+app.config["SESSION_COOKIE_HTTPONLY"] = True  # XSS protection
 
 # Enable CORS and SocketIO - restrict to localhost only to prevent CSRF attacks
 # from malicious websites the user might visit while the app is running
@@ -51,7 +55,8 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 CORS(app, origins=ALLOWED_ORIGINS)
-socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="threading")
+# Let Flask-SocketIO auto-select async_mode to avoid dependency issues
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +69,25 @@ uploaded_files = {}  # {file_id: {filename, path, size, etc}}
 # Transcription engine (loaded after user selects model)
 transcription_engine = None
 engine_loading = False  # Flag to track if model is currently loading
+
+
+def validate_csrf_protection():
+    """
+    Validate that state-changing requests come from the actual application.
+
+    Requires custom header that HTML forms cannot set. This prevents CSRF attacks
+    via form submissions from malicious websites, since browsers block custom headers
+    in forms, and CORS blocks fetch/XHR from cross-origin sites.
+    """
+    # Require custom header that forms cannot set
+    custom_header = request.headers.get("X-Voxtral-Request")
+    if custom_header != "voxtral-web-ui":
+        logger.warning(
+            f"CSRF validation failed: Missing or invalid X-Voxtral-Request header from {request.remote_addr}"
+        )
+        return False
+
+    return True
 
 
 def allowed_file(filename):
@@ -283,7 +307,11 @@ def initialize_model():
     if engine_loading:
         return jsonify({"status": "error", "message": "Model is currently loading. Please wait."}), 409
 
-    data = request.get_json()
+    # Validate JSON request body
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"status": "error", "message": "Invalid or missing JSON request body"}), 400
+
     model_version = data.get("version", "full")
 
     # Validate model version
@@ -637,7 +665,15 @@ def download_transcription_file(filename):
 
 @app.route("/api/history/transcriptions/<filename>", methods=["DELETE"])
 def delete_transcription(filename):
-    """Delete a specific transcription."""
+    """
+    Delete a specific transcription.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     try:
         # Validate path to prevent directory traversal
         file_path = validate_safe_path(OUTPUT_FOLDER, filename)
@@ -657,7 +693,15 @@ def delete_transcription(filename):
 
 @app.route("/api/history/transcriptions/all", methods=["DELETE"])
 def delete_all_transcriptions():
-    """Delete all transcriptions."""
+    """
+    Delete all transcriptions.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     try:
         count = 0
         if OUTPUT_FOLDER.exists():
@@ -720,7 +764,15 @@ def download_upload(filename):
 
 @app.route("/api/history/uploads/<filename>", methods=["DELETE"])
 def delete_upload(filename):
-    """Delete a specific uploaded file."""
+    """
+    Delete a specific uploaded file.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     try:
         # Validate path to prevent directory traversal
         file_path = validate_safe_path(UPLOAD_FOLDER, filename)
@@ -740,7 +792,15 @@ def delete_upload(filename):
 
 @app.route("/api/history/uploads/all", methods=["DELETE"])
 def delete_all_uploads():
-    """Delete all uploaded files."""
+    """
+    Delete all uploaded files.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     try:
         count = 0
         if UPLOAD_FOLDER.exists():
@@ -831,10 +891,13 @@ def install_update():  # noqa: C901
     """
     Install available update from GitHub.
 
-    SECURITY NOTE: This endpoint is now protected by CORS restrictions (localhost only).
-    Previously, with CORS="*", any malicious website could trigger updates via CSRF.
-    Now only requests from the actual application UI are allowed.
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    CORS alone doesn't protect against HTML form submissions from malicious sites.
     """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     try:
         logger.info("Starting automatic update process...")
 

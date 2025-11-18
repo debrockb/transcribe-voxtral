@@ -17,6 +17,7 @@ Flask-CORS==4.0.0
 python-socketio==5.10.0
 python-engineio==4.8.0
 Werkzeug==3.0.1
+simple-websocket>=0.10.0  # Required for Flask-SocketIO threading mode
 
 # System monitoring and updates
 psutil>=5.9.0         # Memory and system monitoring

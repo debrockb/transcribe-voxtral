@@ -169,6 +169,36 @@ def success_response(data=None, message=None):
     return jsonify(response)
 
 
+def validate_safe_path(base_dir, filename):
+    """
+    Validate that the requested filename stays within the base directory.
+
+    Args:
+        base_dir: Base directory (Path object)
+        filename: User-provided filename
+
+    Returns:
+        Path object if safe, None if path traversal detected
+    """
+    try:
+        # Resolve the full path
+        full_path = (base_dir / filename).resolve()
+
+        # Check if it's a file and within the base directory
+        if not full_path.is_file():
+            return None
+
+        # Ensure the resolved path is within the base directory
+        if base_dir.resolve() not in full_path.parents and full_path != base_dir.resolve():
+            logger.warning(f"Path traversal attempt detected: {filename}")
+            return None
+
+        return full_path
+    except Exception as e:
+        logger.error(f"Error validating path for {filename}: {e}")
+        return None
+
+
 # Routes
 
 
@@ -355,7 +385,11 @@ def start_transcription():  # noqa: C901
             503,
         )
 
-    data = request.json
+    # Validate JSON request body
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"status": "error", "message": "Invalid or missing JSON request body"}), 400
+
     file_id = data.get("file_id")
     filename = data.get("filename")
     language = data.get("language", "en")
@@ -557,9 +591,10 @@ def list_transcriptions():
 def get_transcription_content(filename):
     """Get transcription content as JSON for viewing."""
     try:
-        file_path = OUTPUT_FOLDER / filename
+        # Validate path to prevent directory traversal
+        file_path = validate_safe_path(OUTPUT_FOLDER, filename)
 
-        if not file_path.exists():
+        if not file_path:
             return jsonify({"status": "error", "message": "File not found"}), 404
 
         # Read file content
@@ -580,9 +615,10 @@ def get_transcription_content(filename):
 def download_transcription_file(filename):
     """Download a specific transcription file."""
     try:
-        file_path = OUTPUT_FOLDER / filename
+        # Validate path to prevent directory traversal
+        file_path = validate_safe_path(OUTPUT_FOLDER, filename)
 
-        if not file_path.exists():
+        if not file_path:
             return jsonify({"status": "error", "message": "File not found"}), 404
 
         return send_file(file_path, as_attachment=True, download_name=filename)
@@ -596,9 +632,10 @@ def download_transcription_file(filename):
 def delete_transcription(filename):
     """Delete a specific transcription."""
     try:
-        file_path = OUTPUT_FOLDER / filename
+        # Validate path to prevent directory traversal
+        file_path = validate_safe_path(OUTPUT_FOLDER, filename)
 
-        if not file_path.exists():
+        if not file_path:
             return jsonify({"status": "error", "message": "File not found"}), 404
 
         file_path.unlink()
@@ -661,9 +698,10 @@ def list_uploads():
 def download_upload(filename):
     """Download a specific uploaded file."""
     try:
-        file_path = UPLOAD_FOLDER / filename
+        # Validate path to prevent directory traversal
+        file_path = validate_safe_path(UPLOAD_FOLDER, filename)
 
-        if not file_path.exists():
+        if not file_path:
             return jsonify({"status": "error", "message": "File not found"}), 404
 
         return send_file(file_path, as_attachment=True, download_name=filename)
@@ -677,9 +715,10 @@ def download_upload(filename):
 def delete_upload(filename):
     """Delete a specific uploaded file."""
     try:
-        file_path = UPLOAD_FOLDER / filename
+        # Validate path to prevent directory traversal
+        file_path = validate_safe_path(UPLOAD_FOLDER, filename)
 
-        if not file_path.exists():
+        if not file_path:
             return jsonify({"status": "error", "message": "File not found"}), 404
 
         file_path.unlink()

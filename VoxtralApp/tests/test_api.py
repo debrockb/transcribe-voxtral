@@ -255,6 +255,109 @@ class TestHistoryEndpoints:
 
 
 @pytest.mark.api
+class TestPathTraversalSecurity:
+    """Test path traversal security fixes"""
+
+    def test_view_transcription_path_traversal(self, client, app):
+        """Test that path traversal is blocked when viewing transcription"""
+        # Attempt to access files outside transcription folder using ../
+        malicious_paths = [
+            "../config.json",
+            "../../config.json",
+            "../app.py",
+            "../../VERSION",
+        ]
+
+        for path in malicious_paths:
+            response = client.get(f"/api/history/transcriptions/{path}")
+            assert response.status_code == 404, f"Path traversal not blocked for: {path}"
+
+            # Only check JSON if we got a JSON response
+            if response.content_type and 'application/json' in response.content_type:
+                data = json.loads(response.data)
+                assert data["status"] == "error"
+                assert "not found" in data["message"].lower()
+
+    def test_download_transcription_path_traversal(self, client, app):
+        """Test that path traversal is blocked when downloading transcription"""
+        malicious_paths = [
+            "../config.json",
+            "../../app.py",
+            "../../../etc/passwd",
+        ]
+
+        for path in malicious_paths:
+            response = client.get(f"/api/history/transcriptions/{path}/download")
+            assert response.status_code == 404, f"Path traversal not blocked for: {path}"
+
+    def test_delete_transcription_path_traversal(self, client, app):
+        """Test that path traversal is blocked when deleting transcription"""
+        malicious_paths = [
+            "../config.json",
+            "../../app.py",
+            "../VERSION",
+        ]
+
+        for path in malicious_paths:
+            response = client.delete(f"/api/history/transcriptions/{path}")
+            assert response.status_code == 404, f"Path traversal not blocked for: {path}"
+
+            # Only check JSON if we got a JSON response
+            if response.content_type and 'application/json' in response.content_type:
+                data = json.loads(response.data)
+                assert data["status"] == "error"
+
+    def test_download_upload_path_traversal(self, client, app):
+        """Test that path traversal is blocked when downloading upload"""
+        malicious_paths = [
+            "../config.json",
+            "../../transcriptions_voxtral_final/secret.txt",
+            "../app.py",
+        ]
+
+        for path in malicious_paths:
+            response = client.get(f"/api/history/uploads/{path}")
+            assert response.status_code == 404, f"Path traversal not blocked for: {path}"
+
+    def test_delete_upload_path_traversal(self, client, app):
+        """Test that path traversal is blocked when deleting upload"""
+        malicious_paths = [
+            "../config.json",
+            "../../app.py",
+            "../VERSION",
+        ]
+
+        for path in malicious_paths:
+            response = client.delete(f"/api/history/uploads/{path}")
+            assert response.status_code == 404, f"Path traversal not blocked for: {path}"
+
+            # Only check JSON if we got a JSON response
+            if response.content_type and 'application/json' in response.content_type:
+                data = json.loads(response.data)
+                assert data["status"] == "error"
+
+    def test_absolute_path_blocked(self, client, app):
+        """Test that absolute paths are blocked"""
+        import platform
+
+        if platform.system() == "Windows":
+            malicious_path = "C:/Windows/System32/config/sam"
+        else:
+            malicious_path = "/etc/passwd"
+
+        # Test on all vulnerable endpoints
+        endpoints = [
+            f"/api/history/transcriptions/{malicious_path}",
+            f"/api/history/transcriptions/{malicious_path}/download",
+            f"/api/history/uploads/{malicious_path}",
+        ]
+
+        for endpoint in endpoints:
+            response = client.get(endpoint)
+            assert response.status_code == 404, f"Absolute path not blocked for: {endpoint}"
+
+
+@pytest.mark.api
 class TestWebSocketEvents:
     """Test WebSocket functionality"""
 

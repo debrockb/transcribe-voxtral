@@ -94,10 +94,23 @@ class TranscriptionEngine:
                     f"bitsandbytes quantization requires CUDA (NVIDIA GPU). "
                     f"Loading full precision model instead."
                 )
-                self._emit_progress({
-                    "status": "warning",
-                    "message": f"Quantization not supported on {self.device.upper()}, using full precision",
-                })
+
+                # Warn about slow CPU loading
+                if self.device == "cpu":
+                    logger.warning(
+                        "Loading large model on CPU will be VERY slow (10-30 minutes). "
+                        "For better performance, use a system with NVIDIA GPU."
+                    )
+                    self._emit_progress({
+                        "status": "warning",
+                        "message": "CPU detected - Model loading will take 10-30 minutes. Please be patient...",
+                    })
+                else:
+                    self._emit_progress({
+                        "status": "warning",
+                        "message": f"Quantization not supported on {self.device.upper()}, using full precision",
+                    })
+
                 self.quantization = None  # Disable quantization
                 model_kwargs["device_map"] = self.device
             elif self.quantization == "4bit":

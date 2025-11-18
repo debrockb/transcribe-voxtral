@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxtral - Starting Up...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 600px;
+            padding: 40px 20px;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .subtitle {
+            font-size: 18px;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        /* Loading spinner */
+        .spinner-container {
+            margin: 40px 0;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Status section */
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .status-message {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .status-detail {
+            font-size: 14px;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+
+        /* Progress steps */
+        .steps {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .step.active {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .step.complete {
+            opacity: 0.6;
+        }
+
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .step-icon.pending {
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+        }
+
+        .step-icon.active {
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        .step-icon.complete::before {
+            content: '✓';
+            font-size: 18px;
+            color: #4ade80;
+        }
+
+        .step-text {
+            font-size: 14px;
+        }
+
+        /* Timer */
+        .timer {
+            margin-top: 20px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        /* Error state */
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .error-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎤 Voxtral</div>
+        <div class="subtitle">Audio Transcription Platform</div>
+
+        <div class="spinner-container">
+            <div class="spinner"></div>
+        </div>
+
+        <div class="status">
+            <div class="status-message" id="statusMessage">Starting application...</div>
+            <div class="status-detail" id="statusDetail">
+                Please wait while we prepare the application for first use.
+            </div>
+
+            <div class="steps">
+                <div class="step" id="step-env">
+                    <div class="step-icon pending"></div>
+                    <div class="step-text">Setting up environment</div>
+                </div>
+                <div class="step" id="step-deps">
+                    <div class="step-icon pending"></div>
+                    <div class="step-text">Installing dependencies</div>
+                </div>
+                <div class="step" id="step-server">
+                    <div class="step-icon pending"></div>
+                    <div class="step-text">Starting web server</div>
+                </div>
+                <div class="step" id="step-ready">
+                    <div class="step-icon pending"></div>
+                    <div class="step-text">Application ready</div>
+                </div>
+            </div>
+
+            <div class="timer">
+                <span id="elapsed">0</span>s elapsed
+            </div>
+        </div>
+
+        <div id="errorContainer"></div>
+    </div>
+
+    <script>
+        const startTime = Date.now();
+        let currentStep = 0;
+        let checkAttempts = 0;
+        const MAX_ATTEMPTS = 300; // 5 minutes at 1 check per second
+
+        const steps = [
+            { id: 'step-env', message: 'Setting up environment...', detail: 'Creating virtual environment and checking requirements.' },
+            { id: 'step-deps', message: 'Installing dependencies...', detail: 'This may take 2-5 minutes on first run. Installing PyTorch, librosa, and other packages.' },
+            { id: 'step-server', message: 'Starting web server...', detail: 'Initializing Flask application and loading modules.' },
+            { id: 'step-ready', message: 'Almost ready!', detail: 'Finalizing startup sequence...' }
+        ];
+
+        // Update timer
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('elapsed').textContent = elapsed;
+        }, 1000);
+
+        function updateStep(stepIndex) {
+            if (stepIndex === currentStep) return;
+
+            // Mark previous steps as complete
+            for (let i = 0; i < stepIndex; i++) {
+                const stepEl = document.getElementById(steps[i].id);
+                stepEl.classList.add('complete');
+                stepEl.classList.remove('active');
+                const icon = stepEl.querySelector('.step-icon');
+                icon.className = 'step-icon complete';
+            }
+
+            // Mark current step as active
+            if (stepIndex < steps.length) {
+                const stepEl = document.getElementById(steps[stepIndex].id);
+                stepEl.classList.add('active');
+                stepEl.classList.remove('pending');
+                const icon = stepEl.querySelector('.step-icon');
+                icon.className = 'step-icon active';
+
+                document.getElementById('statusMessage').textContent = steps[stepIndex].message;
+                document.getElementById('statusDetail').textContent = steps[stepIndex].detail;
+            }
+
+            currentStep = stepIndex;
+        }
+
+        function checkServerStatus() {
+            checkAttempts++;
+
+            // Estimate progress based on time
+            const elapsed = (Date.now() - startTime) / 1000;
+            if (elapsed > 2 && currentStep === 0) updateStep(1); // Assume deps installation started
+            if (elapsed > 30 && currentStep === 1) updateStep(2); // Assume server starting
+
+            fetch('http://localhost:8000/api/health')
+                .then(response => {
+                    if (response.ok) {
+                        // Server is ready!
+                        updateStep(3);
+                        document.getElementById('statusMessage').textContent = 'Ready! Redirecting...';
+                        document.getElementById('statusDetail').textContent = 'Application is ready. Redirecting you now...';
+
+                        setTimeout(() => {
+                            window.location.href = 'http://localhost:8000';
+                        }, 1000);
+                    } else {
+                        // Server responded but not ready yet
+                        setTimeout(checkServerStatus, 1000);
+                    }
+                })
+                .catch(error => {
+                    // Server not ready yet
+                    if (checkAttempts < MAX_ATTEMPTS) {
+                        setTimeout(checkServerStatus, 1000);
+                    } else {
+                        // Timeout
+                        showError(
+                            'Startup Timeout',
+                            'The application is taking longer than expected to start. This could be due to a slow internet connection or system resources. Please check the console window for details or try restarting.'
+                        );
+                    }
+                });
+        }
+
+        function showError(title, message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `
+                <div class="error">
+                    <div class="error-title">${title}</div>
+                    <div>${message}</div>
+                </div>
+            `;
+            document.querySelector('.spinner').style.display = 'none';
+        }
+
+        // Start checking immediately
+        updateStep(0);
+        setTimeout(checkServerStatus, 2000); // Wait 2 seconds before first check
+    </script>
+</body>
+</html>

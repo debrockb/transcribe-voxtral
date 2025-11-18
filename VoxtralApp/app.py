@@ -59,8 +59,8 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
 ]
 CORS(app, origins=ALLOWED_ORIGINS)
-# Let Flask-SocketIO auto-select async_mode to avoid dependency issues
-socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS)
+# Use threading mode explicitly - compatible with all environments without extra dependencies
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins=ALLOWED_ORIGINS)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -73,6 +73,7 @@ uploaded_files = {}  # {file_id: {filename, path, size, etc}}
 # Transcription engine (loaded after user selects model)
 transcription_engine = None
 engine_loading = False  # Flag to track if model is currently loading
+engine_lock = threading.Lock()  # Prevent concurrent transcriptions (engine is not thread-safe)
 
 
 def validate_csrf_protection():
@@ -149,61 +150,64 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
         output_path: Path to write transcription
         cleanup_path: Optional path to delete after transcription (e.g., converted video WAV file)
     """
-    try:
-        # Create progress callback with job_id
-        def callback(data):
-            progress_callback(job_id, data)
+    # Acquire lock to ensure only one transcription runs at a time
+    with engine_lock:
+        try:
+            # Create progress callback with job_id
+            def callback(data):
+                progress_callback(job_id, data)
 
-        # Update engine callback
-        transcription_engine.progress_callback = callback
+            # Update engine callback
+            transcription_engine.progress_callback = callback
 
-        # Start transcription
-        result = transcription_engine.transcribe_file(
-            input_audio_path=str(file_path), output_text_path=str(output_path), language=language
-        )
-
-        if result["status"] == "success":
-            jobs[job_id].update(
-                {
-                    "status": "complete",
-                    "transcript": result["transcript"],
-                    "duration": result["duration_minutes"],
-                    "word_count": result["word_count"],
-                    "char_count": result["char_count"],
-                    "completed_at": datetime.now().isoformat(),
-                }
+            # Start transcription
+            result = transcription_engine.transcribe_file(
+                input_audio_path=str(file_path), output_text_path=str(output_path), language=language
             )
 
-            socketio.emit(
-                "transcription_complete",
-                {
-                    "job_id": job_id,
-                    "transcript": result["transcript"],
-                    "duration": result["duration_minutes"],
-                    "word_count": result["word_count"],
-                },
-            )
-        else:
-            jobs[job_id].update({"status": "error", "error": result.get("error", "Unknown error")})
+            if result["status"] == "success":
+                # Only store metadata - transcript is already written to disk
+                # This prevents memory leak from storing large transcripts in RAM
+                jobs[job_id].update(
+                    {
+                        "status": "complete",
+                        "duration": result["duration_minutes"],
+                        "word_count": result["word_count"],
+                        "char_count": result["char_count"],
+                        "completed_at": datetime.now().isoformat(),
+                    }
+                )
 
-            socketio.emit("transcription_error", {"job_id": job_id, "error": result.get("error", "Unknown error")})
+                socketio.emit(
+                    "transcription_complete",
+                    {
+                        "job_id": job_id,
+                        "transcript": result["transcript"],  # Send once via WebSocket then discard
+                        "duration": result["duration_minutes"],
+                        "word_count": result["word_count"],
+                    },
+                )
+            else:
+                jobs[job_id].update({"status": "error", "error": result.get("error", "Unknown error")})
 
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Transcription error for job {job_id}: {error_msg}")
+                socketio.emit("transcription_error", {"job_id": job_id, "error": result.get("error", "Unknown error")})
 
-        jobs[job_id].update({"status": "error", "error": error_msg})
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Transcription error for job {job_id}: {error_msg}")
 
-        socketio.emit("transcription_error", {"job_id": job_id, "error": error_msg})
+            jobs[job_id].update({"status": "error", "error": error_msg})
 
-    finally:
-        # Clean up converted audio file if it was from video
-        if cleanup_path and Path(cleanup_path).exists():
-            try:
-                Path(cleanup_path).unlink()
-                logger.info(f"Cleaned up converted audio file: {cleanup_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up converted audio file {cleanup_path}: {e}")
+            socketio.emit("transcription_error", {"job_id": job_id, "error": error_msg})
+
+        finally:
+            # Clean up converted audio file if it was from video
+            if cleanup_path and Path(cleanup_path).exists():
+                try:
+                    Path(cleanup_path).unlink()
+                    logger.info(f"Cleaned up converted audio file: {cleanup_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up converted audio file {cleanup_path}: {e}")
 
 
 # Helper functions for consistent API responses
@@ -465,6 +469,21 @@ def start_transcription():  # noqa: C901
             ),
             503,
         )
+
+    # Check if another transcription is running (engine is not thread-safe)
+    if not engine_lock.acquire(blocking=False):
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Another transcription is currently in progress. Please wait for it to complete.",
+                }
+            ),
+            429,  # Too Many Requests
+        )
+
+    # Release lock immediately - will be acquired in background thread
+    engine_lock.release()
 
     # Validate JSON request body
     data = request.get_json(silent=True)

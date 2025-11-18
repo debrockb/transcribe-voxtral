@@ -1,97 +1,199 @@
-# Transcribe Voxtral Python Script
+# Voxtral Transcription Application
 
-A Python tool that transcribes audio files using the Mistral AI Voxtral-Mini-3B model. This script leverages local AI processing for privacy-focused, cost-free audio transcription.
+A Flask-based web application for transcribing audio and video files using the Mistral AI Voxtral-Mini-3B model. Features a modern web interface with real-time progress updates, REST API, and WebSocket support, while leveraging local AI processing for privacy-focused, cost-free transcription.
 
 ![Transcribe Voxtral hero banner](assets/voxtral_banner.svg)
 
 ## Features
 
-- Transcribes audio files (WAV, MP3, FLAC, M4A) to text
-- Processes large files in 2-minute chunks to manage memory efficiently
-- Automatic device detection (MPS for Apple Silicon, CUDA for NVIDIA GPUs, or CPU)
-- Batch processing of multiple audio files in one run
-- No API costs - runs entirely on local hardware
-- Multilingual support (30+ languages)
+### Web Application
+- 🌐 **Modern Web Interface** - User-friendly drag-and-drop file upload
+- ⚡ **Real-Time Progress** - Live updates via WebSocket during transcription
+- 📊 **Progress Tracking** - Visual progress bar with chunk-by-chunk updates
+- 📋 **Easy Export** - Copy to clipboard or download as text file
+- 🎨 **Responsive Design** - Works on desktop and mobile browsers
+
+### Transcription
+- 🎵 **Audio & Video Support** - WAV, MP3, FLAC, M4A, MP4, AVI, MOV
+- 🎬 **Auto Video Conversion** - Automatically extracts audio from video files
+- 🌍 **30+ Languages** - Multilingual support (English, French, Spanish, and more)
+- 🔄 **Chunked Processing** - Handles large files efficiently with 2-minute chunks
+- 🎯 **High Accuracy** - Powered by Mistral AI Voxtral-Mini-3B model
+
+### Performance & Privacy
+- 🚀 **Device Auto-Detection** - MPS (Apple Silicon), CUDA (NVIDIA GPU), or CPU
+- 🔒 **Privacy-Focused** - All processing on local hardware, no cloud uploads
+- 💰 **No API Costs** - Completely free to use
+- ⚙️ **Efficient Memory** - Smart chunking prevents memory overflow
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Web Browser                        │
+│          (HTML/CSS/JavaScript + Socket.IO)          │
+└──────────────────┬──────────────────────────────────┘
+                   │ HTTP/WebSocket
+┌──────────────────▼──────────────────────────────────┐
+│              Flask Application                       │
+│  ┌─────────────────────────────────────────────┐   │
+│  │      REST API + WebSocket (app.py)          │   │
+│  └──────────┬──────────────────────────────────┘   │
+│             │                                        │
+│  ┌──────────▼──────────────────────────────────┐   │
+│  │   TranscriptionEngine (transcription_       │   │
+│  │        engine.py)                            │   │
+│  │  • Model loading & device detection          │   │
+│  │  • Audio chunking & processing               │   │
+│  │  • Progress callbacks                        │   │
+│  └──────────┬──────────────────────────────────┘   │
+└─────────────┼──────────────────────────────────────┘
+              │
+┌─────────────▼──────────────────────────────────────┐
+│       Mistral AI Voxtral-Mini-3B Model             │
+│            (~20GB, cached locally)                  │
+└────────────────────────────────────────────────────┘
+```
 
 ## Requirements
 
-- Python 3.11 or later
-- macOS, Linux, or Windows (optimized for Apple Silicon with MPS support)
-- 20GB+ disk space for initial model download
-- 8GB+ RAM recommended (16GB+ for optimal performance)
+- **Python 3.11 or later**
+- **Operating System:** macOS, Linux, or Windows
+- **Disk Space:** 20GB+ for initial model download
+- **RAM:** 8GB+ (16GB+ recommended for optimal performance)
+- **Internet:** Required for initial model download only
 
-## Setup
+### Optional
+- **FFmpeg** - For video conversion (MP4, AVI, MOV files)
+  - macOS: `brew install ffmpeg`
+  - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 
-### Quick Setup (macOS)
+## Quick Start
 
+### 1. Setup
+
+Navigate to the VoxtralApp directory:
+
+```bash
+cd transcribe-voxtral-main/VoxtralApp
+```
+
+**macOS/Linux:**
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-### Manual Setup (All Platforms)
-
-```bash
-python3.11 -m venv voxtral_env
-source voxtral_env/bin/activate  # macOS/Linux
-# OR
-voxtral_env\Scripts\activate     # Windows
-
+**Windows:**
+```cmd
+python -m venv voxtral_env
+voxtral_env\Scripts\activate.bat
 pip install -r requirements.txt
 ```
 
-## Usage
+### 2. Start the Web Application
 
-### Running the Script
-
-**Full command:**
+**macOS/Linux:**
 ```bash
-cd "/Users/ddbco/Desktop/Transcribe Voxtral Python script"
-"/Users/ddbco/Desktop/Transcribe Voxtral Python script/voxtral_env/bin/python" transcribe_voxtral.py
+./start_web.sh
 ```
 
-**Or use the start script:**
+**Windows:**
+```cmd
+start_web.bat
+```
+
+**Or manually:**
 ```bash
-./start.sh
+source voxtral_env/bin/activate  # macOS/Linux
+# OR
+voxtral_env\Scripts\activate.bat  # Windows
+
+python app.py
 ```
 
-### Input Files
+### 3. Access the Application
 
-Place audio files in the script directory. Supported formats:
-
-- `.wav` - Waveform Audio File
-- `.mp3` - MPEG-1 Audio Layer III
-- `.flac` - Free Lossless Audio Codec
-- `.m4a` - MPEG-4 Audio
-
-The script will process all audio files in the input directory automatically.
-
-### Output
-
-Transcriptions are saved in the `transcriptions_voxtral_final/` directory:
+Open your browser and navigate to:
 ```
-transcriptions_voxtral_final/
-├── audio_file_1_transcription.txt
-├── audio_file_2_transcription.txt
-└── ...
+http://localhost:5000
 ```
 
-Output files are UTF-8 encoded text files with the naming pattern:
+### 4. Transcribe Your First File
+
+1. **Upload** - Drag and drop an audio/video file or click to browse
+2. **Select Language** - Choose the language spoken in your file
+3. **Start** - Click "Start Transcription"
+4. **Monitor** - Watch real-time progress updates
+5. **Export** - Copy to clipboard or download as text file
+
+## Project Structure
+
 ```
-[original_filename]_transcription.txt
+transcribe-voxtral-main/VoxtralApp/
+├── app.py                      # Flask web application
+├── transcription_engine.py     # Core transcription logic
+├── transcribe_voxtral.py       # CLI script for batch processing
+├── requirements.txt            # Production dependencies
+├── requirements-dev.txt        # Development dependencies
+├── static/
+│   ├── css/                   # Stylesheets
+│   ├── js/                    # JavaScript frontend
+│   └── assets/                # Images and icons
+├── templates/
+│   └── index.html             # Main web interface
+├── tests/                      # Comprehensive test suite
+├── docs/
+│   ├── API_DOCUMENTATION.md   # API reference
+│   └── USER_GUIDE.md          # User manual
+├── uploads/                    # Temporary uploads (auto-cleanup)
+├── transcriptions_voxtral_final/  # Saved transcripts
+└── voxtral_env/               # Python virtual environment
 ```
 
-## Configuration
+## Launcher Icons
 
-### Language Settings
+Need a branded icon for the macOS `.command` launcher or the Windows `.bat` shortcut? New PNG, `.icns`, and `.ico` assets live under `assets/icons/`. Follow the short walkthrough in `docs/icon-guide.md` to apply them to your preferred launcher.
 
-Edit line 16 in [transcribe_voxtral.py](transcribe_voxtral.py:16) to change the transcription language:
+## Usage Modes
 
-```python
-language="fr",  # Change this to your desired language code
+### Web Interface (Recommended)
+
+Perfect for interactive use with real-time feedback:
+
+```bash
+cd transcribe-voxtral-main/VoxtralApp
+./start_web.sh  # or start_web.bat on Windows
 ```
 
-**Supported Language Codes:**
+Access at `http://localhost:5000`
+
+**Features:**
+- Drag-and-drop file upload
+- Live progress updates
+- Visual feedback
+- Copy/download transcripts
+- Language selection
+
+### Command Line (Batch Processing)
+
+For automating multiple files or integration with scripts:
+
+```bash
+cd transcribe-voxtral-main/VoxtralApp
+source voxtral_env/bin/activate
+python transcribe_voxtral.py
+```
+
+**Features:**
+- Batch processing of all audio files in a directory
+- Headless operation
+- Scriptable and automatable
+- Lower memory overhead
+
+## Supported Languages
+
+The Voxtral model supports 30+ languages:
 
 | Code | Language | Code | Language | Code | Language |
 |------|----------|------|----------|------|----------|
@@ -106,289 +208,276 @@ language="fr",  # Change this to your desired language code
 | `he` | Hebrew | `id` | Indonesian | `vi` | Vietnamese |
 | `th` | Thai | `ms` | Malay | `ca` | Catalan |
 
-### Key Configuration Parameters
+## API Documentation
 
-Edit [transcribe_voxtral.py](transcribe_voxtral.py) to customize:
+The Flask application provides a REST API and WebSocket interface for programmatic access.
 
-| Parameter | Line | Default | Description |
-|-----------|------|---------|-------------|
-| **INPUT_DIRECTORY** | 79 | Current directory | Where audio files are located |
-| **OUTPUT_SUBFOLDER_NAME** | 80 | `transcriptions_voxtral_final` | Output folder name |
-| **MODEL_ID** | 81 | `mistralai/Voxtral-Mini-3B-2507` | AI model identifier |
-| **language** | 16 | `"fr"` | Transcription language code |
-| **chunk_duration_s** | 36 | `2 * 60` (120 seconds) | Chunk size in seconds |
-| **sample_rate** | 37 | `16000` | Audio sample rate in Hz |
-| **max_new_tokens** | 26 | `512` | Maximum tokens per chunk |
+### REST Endpoints
 
-### Example Configuration Changes
+- `POST /api/upload` - Upload audio/video file
+- `POST /api/transcribe` - Start transcription job
+- `GET /api/status/<job_id>` - Get job status
+- `GET /api/transcript/<job_id>` - Retrieve transcript
+- `GET /api/transcript/<job_id>/download` - Download as file
+- `GET /api/languages` - Get supported languages
+- `GET /api/device-info` - Get device information
 
-**Change language to English:**
+### WebSocket Events
 
-```python
-# Line 16
-language="en",
-```
+- `transcription_progress` - Real-time progress updates
+- `transcription_complete` - Completion notification
+- `transcription_error` - Error notifications
 
-**Increase chunk size to 5 minutes:**
+For complete API reference, see [VoxtralApp/docs/API_DOCUMENTATION.md](VoxtralApp/docs/API_DOCUMENTATION.md)
 
-```python
-# Line 36
-chunk_duration_s = 5 * 60  # 5-minute chunks
-```
+## Configuration
 
-**Change input directory:**
+### Web Application Settings
+
+Edit `app.py` to configure:
 
 ```python
-# Line 79
-INPUT_DIRECTORY = "/path/to/your/audio/files"
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB (line 26)
+UPLOAD_FOLDER = BASE_DIR / "uploads"  # Upload directory (line 23)
+OUTPUT_FOLDER = BASE_DIR / "transcriptions_voxtral_final"  # Output (line 24)
 ```
 
-## Technical Details
+### Transcription Engine Settings
 
-### Model Information
+Edit `transcription_engine.py` to configure:
 
-- **Model:** Mistral AI Voxtral-Mini-3B-2507
+```python
+chunk_duration_s: int = 2 * 60  # Chunk size in seconds (line 150)
+sample_rate: int = 16000  # Audio sample rate (line 151)
+```
+
+### CLI Script Settings
+
+Edit `transcribe_voxtral.py` to configure batch processing:
+
+```python
+INPUT_DIRECTORY = "."  # Where to find audio files
+OUTPUT_SUBFOLDER_NAME = "transcriptions_voxtral_final"  # Output folder
+```
+
+## Device Detection & Performance
+
+The application automatically detects and uses the best available hardware:
+
+### Processing Speed (Approximate)
+
+| Device | Speed | Example (10 min audio) |
+|--------|-------|------------------------|
+| Apple M1/M2/M3 (MPS) | ~1-2x realtime | 5-10 min processing |
+| NVIDIA GPU (CUDA) | ~1-3x realtime | 3-10 min processing |
+| CPU (Fallback) | ~0.1-0.5x realtime | 20-100 min processing |
+
+**Note:** Actual speed varies based on audio quality, language, and specific hardware
+
+### Device Details
+
+**MPS (Apple Silicon)**
+- M1, M2, M3, M4 chips
+- Uses `bfloat16` precision
+- Automatic cache clearing
+- Fastest on Apple devices
+
+**CUDA (NVIDIA GPUs)**
+- Requires CUDA-compatible GPU
+- Uses `bfloat16` precision
+- Requires CUDA toolkit
+
+**CPU (Universal)**
+- Works on all systems
+- Uses `float32` precision
+- Slower but reliable
+
+## Testing
+
+The application includes a comprehensive test suite with pytest.
+
+### Run Tests
+
+```bash
+cd transcribe-voxtral-main/VoxtralApp
+
+# Activate test environment
+source test_venv/bin/activate
+
+# Run all tests (excluding model/GPU tests)
+export TESTING=1
+pytest tests/ -v -m "not requires_model and not requires_gpu and not slow"
+
+# Run specific test categories
+pytest tests/test_api.py -v          # API tests
+pytest tests/test_integration.py -v  # Integration tests
+pytest tests/ -v -m unit            # Unit tests only
+```
+
+### Test Categories
+
+- `unit` - Unit tests for individual components
+- `api` - API endpoint tests
+- `integration` - Integration tests
+- `slow` - Long-running tests
+- `requires_model` - Tests needing the ML model (skipped in CI)
+- `requires_gpu` - Tests requiring GPU (skipped in CI)
+- `cross_platform` - Platform compatibility tests
+
+For more details, see [VoxtralApp/tests/README.md](VoxtralApp/tests/README.md)
+
+## Model Information
+
+**Model:** Mistral AI Voxtral-Mini-3B-2507
+
 - **Type:** Conditional Generation (Audio-to-Text)
 - **Size:** ~20GB download
 - **Architecture:** Transformer-based encoder-decoder
 - **Sample Rate:** 16kHz (automatically resampled)
-
-### Device Detection & Performance
-
-The script automatically selects the best available device:
-
-1. **MPS (Apple Silicon)** - M1/M2/M3 chips
-   - Uses `bfloat16` precision
-   - Fastest on Apple Silicon Macs
-   - Includes automatic cache clearing
-
-2. **CUDA (NVIDIA GPUs)**
-   - Uses `bfloat16` precision
-   - Requires CUDA-compatible GPU
-   - Requires CUDA toolkit installed
-
-3. **CPU (Fallback)**
-   - Uses `float32` precision
-   - Works on all systems
-   - Slower than GPU options
-
-### Processing Pipeline
-
-```
-Audio File (any format)
-    ↓
-Load & Resample to 16kHz mono
-    ↓
-Split into 2-minute chunks
-    ↓
-Save each chunk as temporary WAV
-    ↓
-Transcribe chunk using Voxtral model
-    ↓
-Clean up temporary files
-    ↓
-Combine all transcriptions
-    ↓
-Save as UTF-8 text file
-```
-
-### Memory Management
-
-- **Chunking:** Files are split into 2-minute segments to prevent memory overflow
-- **Sequential Processing:** Chunks are processed one at a time
-- **Temporary Files:** Automatically deleted after each chunk
-- **Cache Clearing:** MPS cache is cleared after each chunk on Apple Silicon
-
-### File Structure
-
-```
-Transcribe Voxtral Python script/
-├── transcribe_voxtral.py      # Main script
-├── requirements.txt           # Python dependencies
-├── setup.sh                   # macOS setup script
-├── start.sh                   # Launch script
-├── README.md                  # This file
-├── voxtral_env/              # Python virtual environment
-└── transcriptions_voxtral_final/  # Output directory (created on first run)
-```
-
-## Performance Notes
-
-### Processing Speed (approximate)
-
-| Device | Speed | Example |
-|--------|-------|---------|
-| Apple M1/M2/M3 (MPS) | ~1-2x realtime | 10 min audio = 5-10 min processing |
-| NVIDIA GPU (CUDA) | ~1-3x realtime | 10 min audio = 3-10 min processing |
-| CPU | ~0.1-0.5x realtime | 10 min audio = 20-100 min processing |
-
-**Note:** Speeds vary based on audio quality, language, and specific hardware
+- **License:** [HuggingFace Model Page](https://huggingface.co/mistralai/Voxtral-Mini-3B-2507)
 
 ### First Run
 
-- Model download: 20GB (one-time, cached locally)
-- Download time: 10-60 minutes depending on internet speed
-- Model location: `~/.cache/huggingface/hub/`
+The model is downloaded automatically on first use:
+
+- **Download Size:** ~20GB
+- **Download Time:** 10-60 minutes (depends on internet speed)
+- **Cache Location:** `~/.cache/huggingface/hub/`
+- **Redownload:** Not needed - model is cached locally
 
 ### Subsequent Runs
 
-- No download needed
+- Model loads from cache in 10-30 seconds
+- No internet connection required
 - Processing starts immediately
-- Model loads in 10-30 seconds
-
-## Dependencies
-
-See [requirements.txt](requirements.txt):
-
-| Package | Purpose |
-|---------|---------|
-| `torch` | Deep learning framework |
-| `librosa` | Audio loading and processing |
-| `soundfile` | Audio file I/O |
-| `transformers` | HuggingFace model interface |
-| `accelerate` | Model optimization |
-| `mistral-common` | Mistral AI utilities |
-| `numpy<2.3` | Numerical operations |
 
 ## Troubleshooting
 
-### Model Download Issues
+### Application Won't Start
 
-**Problem:** Model download fails or times out
-
-- Ensure 20GB+ free disk space
-- Check internet connection stability
-- Try again - downloads resume automatically
-- Check firewall/proxy settings
-
-**Problem:** "Failed to load the model" error
-
-- Verify Python version is 3.11+
-- Ensure virtual environment is activated
-- Reinstall dependencies: `pip install -r requirements.txt --force-reinstall`
-
-### Memory Issues
-
-**Problem:** Out of memory errors during processing
-
-- Reduce chunk duration (line 36): `chunk_duration_s = 1 * 60` (1 minute)
-- Close other applications
-- Restart your computer to free up RAM
-- For large files, process them one at a time
-
-**Problem:** System becomes unresponsive
-
-- Lower chunk size to 30-60 seconds
-- Ensure you have at least 8GB available RAM
-- Monitor memory usage with Activity Monitor/Task Manager
-
-### Audio Processing Errors
-
-**Problem:** "Audio file not found"
-
-- Check file path is correct
-- Ensure file is in the INPUT_DIRECTORY
-- Verify file permissions (readable)
-
-**Problem:** "Audio format not supported"
-
-- Convert to MP3, WAV, FLAC, or M4A
-- Use tools like FFmpeg: `ffmpeg -i input.xxx output.mp3`
-
-**Problem:** Poor transcription quality
-
-- Check audio quality (clear speech, minimal background noise)
-- Verify correct language code (line 16)
-- Increase audio quality if possible (higher bitrate)
-- Try larger chunk sizes for better context
-
-### Device-Specific Issues
-
-**MPS (Apple Silicon):**
-
-- If MPS fails, script will automatically fall back to CPU
-- Update macOS to latest version for best MPS support
-- Check: `python -c "import torch; print(torch.backends.mps.is_available())"`
-
-**CUDA (NVIDIA):**
-
-- Install CUDA toolkit matching your PyTorch version
-- Check: `python -c "import torch; print(torch.cuda.is_available())"`
-- Update NVIDIA drivers
-
-**CPU Mode:**
-
-- Be patient - processing is significantly slower
-- Consider using smaller chunk sizes (60 seconds)
-- Process files overnight if large
-
-### Permission Errors
-
-**Problem:** Cannot write to output directory
-
-- Check directory permissions
-- Ensure you have write access to the script directory
-- Try running from a different location
-
-### Other Issues
-
-**Problem:** Script processes same files multiple times
-
-- Script only processes files that don't have existing transcriptions
-- Delete old transcription files if you want to re-process
-- Check for duplicate audio files with different extensions
-
-**Problem:** Transcriptions are in wrong language
-
-- Verify language parameter (line 16) matches your audio
-- Model may auto-detect if parameter is incorrect
-
-## Advanced Usage
-
-### Processing Specific Files
-
-To process only specific files, you can:
-
-1. Move files to a separate directory
-2. Update INPUT_DIRECTORY (line 79)
-3. Run the script
-
-### Batch Processing Large Collections
-
-For processing many files:
-
-1. Place all audio files in INPUT_DIRECTORY
-2. Run the script once - it will process all files
-3. Monitor progress in terminal output
-4. Transcriptions appear in output folder as they complete
-
-### Customizing Output Format
-
-To modify output format, edit lines 67-71 in [transcribe_voxtral.py](transcribe_voxtral.py:67):
-
-```python
-# Current: space-separated chunks
-final_transcription = " ".join(all_transcriptions).strip()
-
-# Alternative: paragraph breaks between chunks
-final_transcription = "\n\n".join(all_transcriptions).strip()
+**Check Python version:**
+```bash
+python --version  # Should be 3.11+
 ```
 
-### Re-transcribing Files
+**Reinstall dependencies:**
+```bash
+pip install -r requirements.txt --force-reinstall
+```
 
-The script skips files that already have transcriptions. To re-transcribe:
+### Can't Access Web Interface
 
-1. Delete the existing `_transcription.txt` file
-2. Run the script again
+**Solutions:**
+1. Verify server is running (check terminal output)
+2. Try `http://127.0.0.1:5000` instead
+3. Check if port 5000 is in use
+4. Check firewall settings
+
+### Model Download Fails
+
+**Solutions:**
+1. Ensure 20GB+ free disk space
+2. Check internet connection
+3. Check firewall/proxy settings
+4. Downloads resume automatically - try again
+
+### Out of Memory Errors
+
+**Solutions:**
+1. Close other applications
+2. Reduce chunk size in `transcription_engine.py`
+3. Process shorter files
+4. Restart your computer
+
+### Poor Transcription Quality
+
+**Solutions:**
+1. **Verify correct language selected**
+2. Use high-quality audio (minimal background noise)
+3. Ensure adequate audio volume
+4. Try with clear speech examples first
+
+### Video Conversion Fails
+
+**Solutions:**
+1. Install FFmpeg (see requirements)
+2. Install moviepy: `pip install moviepy`
+3. Convert video manually using FFmpeg
+4. Try different video format
+
+For detailed troubleshooting, see [VoxtralApp/docs/USER_GUIDE.md](VoxtralApp/docs/USER_GUIDE.md)
+
+## Development
+
+### Code Quality
+
+**Format code:**
+```bash
+cd transcribe-voxtral-main/VoxtralApp
+source test_venv/bin/activate
+
+# Auto-format with black
+black app.py transcription_engine.py transcribe_voxtral.py tests/*.py
+
+# Sort imports
+isort app.py transcription_engine.py transcribe_voxtral.py tests/*.py --skip test_venv
+```
+
+**Lint code:**
+```bash
+flake8 . --config=.flake8
+```
+
+### Contributing
+
+1. Run tests before committing
+2. Follow code style (black, isort)
+3. Add tests for new features
+4. Update documentation
+
+## Documentation
+
+- **[User Guide](VoxtralApp/docs/USER_GUIDE.md)** - Complete user manual
+- **[API Documentation](VoxtralApp/docs/API_DOCUMENTATION.md)** - API reference
+- **[Test Documentation](VoxtralApp/tests/README.md)** - Testing guide
+- **[Implementation Plan](VoxtralApp/IMPLEMENTATION_PLAN.md)** - Design document
+- **[CLAUDE.md](../CLAUDE.md)** - Claude Code guidance
+
+## Dependencies
+
+### Core
+- **torch** - Deep learning framework
+- **transformers** - HuggingFace model interface
+- **librosa** - Audio processing
+- **soundfile** - Audio file I/O
+- **Flask** - Web framework
+- **Flask-SocketIO** - Real-time WebSocket support
+- **mistral-common** - Mistral AI utilities
+
+### Development
+- **pytest** - Testing framework
+- **black** - Code formatting
+- **isort** - Import sorting
+- **flake8** - Linting
+
+See [requirements.txt](VoxtralApp/requirements.txt) and [requirements-dev.txt](VoxtralApp/requirements-dev.txt) for complete list.
+
+## Privacy & Security
+
+- ✅ **100% Local Processing** - No cloud uploads
+- ✅ **No Data Collection** - No analytics or tracking
+- ✅ **Open Source** - Fully auditable code
+- ✅ **No Account Required** - Use immediately
+- ✅ **Automatic Cleanup** - Temporary files deleted after processing
 
 ## Best Practices
 
-1. **Audio Quality:** Use high-quality recordings (minimal background noise)
-2. **File Organization:** Keep audio files organized by project/date
-3. **Storage:** Ensure adequate disk space before processing large batches
-4. **Monitoring:** Watch the first few chunks to verify correct language/quality
-5. **Backup:** Keep original audio files as backup
-6. **Testing:** Test with a short audio clip first to verify setup
+1. **Test First** - Start with a short audio clip to verify setup
+2. **Correct Language** - Always select the spoken language
+3. **Quality Audio** - Use clear recordings for best results
+4. **Adequate Storage** - Ensure 20GB+ free for model + files
+5. **Monitor Progress** - Watch first transcription to verify quality
+6. **Save Transcripts** - Download/copy before closing browser
 
 ## License
 
@@ -398,7 +487,20 @@ For educational and research purposes. Check Mistral AI's license terms for the 
 
 For issues or questions:
 
-1. Check this README's troubleshooting section
-2. Verify your configuration matches the examples
-3. Check model documentation at HuggingFace
-4. Review error messages carefully - they often indicate the solution
+1. **User Guide** - See [USER_GUIDE.md](VoxtralApp/docs/USER_GUIDE.md) for detailed help
+2. **API Docs** - See [API_DOCUMENTATION.md](VoxtralApp/docs/API_DOCUMENTATION.md) for technical details
+3. **Test Docs** - See [tests/README.md](VoxtralApp/tests/README.md) for testing help
+4. **Troubleshooting** - Check error messages and logs in terminal
+
+## Acknowledgments
+
+Powered by:
+- **Mistral AI** - Voxtral-Mini-3B model
+- **HuggingFace** - Transformers library
+- **Flask** - Web framework
+- **LibROSA** - Audio processing
+- **Socket.IO** - Real-time communications
+
+---
+
+Thank you for using Voxtral Transcription Application! 🎙️

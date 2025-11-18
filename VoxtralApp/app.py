@@ -42,9 +42,16 @@ app.config["SECRET_KEY"] = "voxtral-transcription-secret-key"
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
 app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 
-# Enable CORS and SocketIO
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# Enable CORS and SocketIO - restrict to localhost only to prevent CSRF attacks
+# from malicious websites the user might visit while the app is running
+ALLOWED_ORIGINS = [
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+CORS(app, origins=ALLOWED_ORIGINS)
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="threading")
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -750,30 +757,14 @@ def delete_all_uploads():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route("/api/shutdown", methods=["POST"])
-def shutdown_server():
-    """Shutdown the Flask server gracefully."""
-    try:
-        logger.info("Shutdown request received from client")
-
-        # Function to shutdown after sending response
-        def shutdown():
-            import time
-
-            time.sleep(0.5)  # Give time for response to be sent
-            logger.info("Shutting down server...")
-            os._exit(0)  # Force exit the process
-
-        # Start shutdown in background thread
-        shutdown_thread = threading.Thread(target=shutdown)
-        shutdown_thread.daemon = True
-        shutdown_thread.start()
-
-        return jsonify({"status": "success", "message": "Server shutting down..."})
-
-    except Exception as e:
-        logger.error(f"Error during shutdown: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+# REMOVED: /api/shutdown endpoint
+# This endpoint was removed for security reasons - it allowed any website to kill
+# the server via CSRF attack, interrupting active transcriptions.
+#
+# To shutdown the server:
+# 1. Press Ctrl+C in the terminal where the server is running
+# 2. Or use: pkill -f "python app.py"
+# 3. Or close the terminal window
 
 
 @app.route("/api/system/memory", methods=["GET"])
@@ -837,7 +828,13 @@ def check_updates():
 
 @app.route("/api/updates/install", methods=["POST"])
 def install_update():  # noqa: C901
-    """Install available update from GitHub."""
+    """
+    Install available update from GitHub.
+
+    SECURITY NOTE: This endpoint is now protected by CORS restrictions (localhost only).
+    Previously, with CORS="*", any malicious website could trigger updates via CSRF.
+    Now only requests from the actual application UI are allowed.
+    """
     try:
         logger.info("Starting automatic update process...")
 

@@ -8,7 +8,10 @@ const state = {
     uploadedFile: null,
     currentJobId: null,
     socket: null,
-    languages: []
+    languages: [],
+    modelLoaded: false,
+    availableModels: [],
+    selectedModel: null
 };
 
 // DOM Elements
@@ -44,7 +47,8 @@ const elements = {
     updateBanner: document.getElementById('updateBanner'),
     updateBannerMessage: document.getElementById('updateBannerMessage'),
     viewReleaseBtn: document.getElementById('viewReleaseBtn'),
-    closeUpdateBanner: document.getElementById('closeUpdateBanner')
+    closeUpdateBanner: document.getElementById('closeUpdateBanner'),
+    checkUpdateBtn: document.getElementById('checkUpdateBtn')
 };
 
 // Initialize application
@@ -86,6 +90,11 @@ function setupEventListeners() {
         elements.closeUpdateBanner.addEventListener('click', () => {
             elements.updateBanner.style.display = 'none';
         });
+    }
+
+    // Manual update check
+    if (elements.checkUpdateBtn) {
+        elements.checkUpdateBtn.addEventListener('click', manualUpdateCheck);
     }
 }
 
@@ -242,6 +251,41 @@ function showUpdateBanner(updateData) {
     elements.updateBanner.style.display = 'block';
 
     console.log('Update available:', updateData);
+}
+
+/**
+ * Manual update check triggered by user
+ * Shows feedback whether update is available or not
+ */
+async function manualUpdateCheck() {
+    try {
+        showToast('Checking for updates...', 'info');
+
+        const response = await fetch('/api/updates/check');
+        const data = await response.json();
+
+        if (response.ok) {
+            if (data.update_available) {
+                // Show banner and notify user
+                showUpdateBanner(data);
+                showToast(
+                    `Update available: ${data.latest_version} (current: ${data.current_version})`,
+                    'success'
+                );
+            } else {
+                // No update available - show positive feedback
+                showToast(
+                    `You're up to date! Running version ${data.current_version}`,
+                    'success'
+                );
+            }
+        } else {
+            throw new Error(data.error || 'Failed to check for updates');
+        }
+    } catch (error) {
+        console.error('Update check failed:', error);
+        showToast('Failed to check for updates. Please try again later.', 'error');
+    }
 }
 
 // Handle file selection

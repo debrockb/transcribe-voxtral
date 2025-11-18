@@ -176,6 +176,9 @@
                 <button class="btn-ghost" id="toggleHistory">
                     <span class="btn-icon">📚</span> View History
                 </button>
+                <button class="btn-ghost" id="checkUpdateBtn">
+                    <span class="btn-icon">🔄</span> Check for Updates
+                </button>
                 <span class="workspace-note">Review previous runs without leaving your device.</span>
             </div>
         </main>
@@ -235,6 +238,44 @@
                 </div>
             </div>
         </section>
+    </div>
+
+    <!-- Model Selection Modal -->
+    <div class="model-modal" id="modelModal" style="display: none;">
+        <div class="model-modal-backdrop"></div>
+        <div class="model-modal-content">
+            <div class="model-modal-header">
+                <h2>Choose Your Model</h2>
+                <p class="model-modal-subtitle">Select which Voxtral model to use for transcription</p>
+            </div>
+
+            <div class="model-selection-grid" id="modelGrid">
+                <!-- Model cards will be inserted here by JavaScript -->
+            </div>
+
+            <div class="model-modal-footer">
+                <button class="btn-primary btn-large" id="initializeModelBtn" disabled>
+                    Initialize Model
+                </button>
+            </div>
+
+            <!-- Loading state -->
+            <div class="model-loading-overlay" id="modelLoadingOverlay" style="display: none;">
+                <div class="model-loading-content">
+                    <div class="spinner"></div>
+                    <h3 id="modelLoadingTitle">Loading Model...</h3>
+                    <p id="modelLoadingMessage">This may take a few minutes...</p>
+                    <div class="model-loading-tips">
+                        <p><strong>Please wait:</strong></p>
+                        <ul>
+                            <li>Do not close this window</li>
+                            <li>Model files will be downloaded if needed</li>
+                            <li>Progress will update automatically</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notification -->

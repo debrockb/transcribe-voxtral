@@ -582,6 +582,7 @@ def shutdown_server():
         # Function to shutdown after sending response
         def shutdown():
             import time
+
             time.sleep(0.5)  # Give time for response to be sent
             logger.info("Shutting down server...")
             os._exit(0)  # Force exit the process

@@ -237,8 +237,6 @@ def get_model_status():
 @app.route("/api/model/initialize", methods=["POST"])
 def initialize_model():
     """Initialize model with selected version."""
-    global transcription_engine
-
     if transcription_engine:
         return (
             jsonify({"status": "error", "message": "Model already loaded. Please reload the application to change models."}),
@@ -345,6 +343,18 @@ def upload_file():
 @app.route("/api/transcribe", methods=["POST"])
 def start_transcription():  # noqa: C901
     """Start transcription job."""
+    # Check if transcription engine is initialized
+    if transcription_engine is None:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Transcription engine not initialized. Please select a model first.",
+                }
+            ),
+            503,
+        )
+
     data = request.json
     file_id = data.get("file_id")
     filename = data.get("filename")
@@ -386,7 +396,8 @@ def start_transcription():  # noqa: C901
 
         # Generate job ID and output path
         job_id = str(uuid.uuid4())
-        output_filename = f"{Path(file_info['original_filename']).stem}_transcription.txt"
+        # Include job_id in filename to prevent overwriting previous transcriptions
+        output_filename = f"{Path(file_info['original_filename']).stem}_{job_id[:8]}_transcription.txt"
         output_path = OUTPUT_FOLDER / output_filename
 
         # Create job entry
@@ -544,6 +555,29 @@ def list_transcriptions():
 
 @app.route("/api/history/transcriptions/<filename>", methods=["GET"])
 def get_transcription_content(filename):
+    """Get transcription content as JSON for viewing."""
+    try:
+        file_path = OUTPUT_FOLDER / filename
+
+        if not file_path.exists():
+            return jsonify({"status": "error", "message": "File not found"}), 404
+
+        # Read file content
+        content = file_path.read_text(encoding="utf-8")
+
+        # Calculate stats
+        word_count = len(content.split())
+        char_count = len(content)
+
+        return jsonify({"status": "success", "content": content, "word_count": word_count, "char_count": char_count})
+
+    except Exception as e:
+        logger.error(f"Error reading transcription {filename}: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/history/transcriptions/<filename>/download", methods=["GET"])
+def download_transcription_file(filename):
     """Download a specific transcription file."""
     try:
         file_path = OUTPUT_FOLDER / filename
@@ -763,7 +797,7 @@ def check_updates():
 
 
 @app.route("/api/updates/install", methods=["POST"])
-def install_update():
+def install_update():  # noqa: C901
     """Install available update from GitHub."""
     try:
         logger.info("Starting automatic update process...")
@@ -771,30 +805,27 @@ def install_update():
         # Check if running from git repository
         git_dir = BASE_DIR.parent / ".git"
         if not git_dir.exists():
-            return jsonify({
-                "status": "error",
-                "message": "Not a git repository. Please update manually by downloading the latest release."
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Not a git repository. Please update manually by downloading the latest release.",
+                    }
+                ),
+                400,
+            )
 
-        # Determine Python executable and pip based on platform
+        # Determine pip executable based on platform
         if sys.platform == "win32":
             # Windows
-            python_exe = BASE_DIR / "voxtral_env" / "Scripts" / "python.exe"
             pip_exe = BASE_DIR / "voxtral_env" / "Scripts" / "pip.exe"
         else:
             # Mac/Linux
-            python_exe = BASE_DIR / "voxtral_env" / "bin" / "python"
             pip_exe = BASE_DIR / "voxtral_env" / "bin" / "pip"
 
         # Step 1: Run git pull
         logger.info("Pulling latest changes from GitHub...")
-        git_result = subprocess.run(
-            ["git", "pull"],
-            cwd=str(BASE_DIR.parent),
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
+        git_result = subprocess.run(["git", "pull"], cwd=str(BASE_DIR.parent), capture_output=True, text=True, timeout=60)
 
         if git_result.returncode != 0:
             error_msg = f"Git pull failed: {git_result.stderr}"
@@ -805,11 +836,7 @@ def install_update():
 
         # Check if anything was updated
         if "Already up to date" in git_result.stdout or "Already up-to-date" in git_result.stdout:
-            return jsonify({
-                "status": "success",
-                "message": "Already up to date. No changes to install.",
-                "updated": False
-            })
+            return jsonify({"status": "success", "message": "Already up to date. No changes to install.", "updated": False})
 
         # Step 2: Update dependencies
         logger.info("Updating dependencies...")
@@ -820,7 +847,7 @@ def install_update():
                 [str(pip_exe), "install", "-r", str(requirements_file), "--upgrade"],
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=300,
             )
 
             if pip_result.returncode != 0:
@@ -838,11 +865,13 @@ def install_update():
         restart_thread = threading.Thread(target=restart_app, daemon=True)
         restart_thread.start()
 
-        return jsonify({
-            "status": "success",
-            "message": "Update installed successfully. Application will restart in 2 seconds...",
-            "updated": True
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "message": "Update installed successfully. Application will restart in 2 seconds...",
+                "updated": True,
+            }
+        )
 
     except subprocess.TimeoutExpired:
         error_msg = "Update process timed out"

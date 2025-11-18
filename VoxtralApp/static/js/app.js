@@ -1021,7 +1021,7 @@ async function viewTranscription(filename) {
 
 // Download transcription file
 function downloadTranscriptionFile(filename) {
-    window.location.href = `/api/history/transcriptions/${encodeURIComponent(filename)}`;
+    window.location.href = `/api/history/transcriptions/${encodeURIComponent(filename)}/download`;
 }
 
 // Delete transcription

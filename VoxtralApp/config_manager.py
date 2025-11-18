@@ -50,6 +50,14 @@ class ConfigManager:
                         "name": "Voxtral Mini 3B (Full)",
                         "size_gb": 9.36,
                         "format": "safetensors",
+                        "quantization": None,
+                        "description": "Full precision model - Best quality, requires ~20-30GB RAM during loading (CPU loading: 10-30 min)",
+                        "memory_requirements": {
+                            "disk": "9.36 GB",
+                            "ram_loading": "20-30 GB (Windows: increase pagefile to 50GB)",
+                            "ram_inference": "10-12 GB",
+                            "load_time_cpu": "10-30 minutes (use NVIDIA GPU for faster loading)",
+                        },
                     },
                     "quantized": {
                         "id": "mistralai/Voxtral-Mini-3B-2507",
@@ -61,8 +69,8 @@ class ConfigManager:
                         "memory_requirements": {
                             "disk": "9.36 GB (quantized during load)",
                             "ram_loading": "5-8 GB (NVIDIA GPU) / 20-30GB (Mac/CPU fallback)",
-                            "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)"
-                        }
+                            "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)",
+                        },
                     },
                 },
             },

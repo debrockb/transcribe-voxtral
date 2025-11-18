@@ -120,19 +120,21 @@ class TestTranscribeEndpoint:
 
     def test_transcribe_missing_filename(self, client):
         """Test transcription without filename"""
-        response = client.post("/api/transcribe", json={"language": "en"})
+        with patch("app.transcription_engine", MagicMock()):
+            response = client.post("/api/transcribe", json={"language": "en"})
 
-        assert response.status_code == 400
-        result = json.loads(response.data)
-        assert result["status"] == "error"
+            assert response.status_code == 400
+            result = json.loads(response.data)
+            assert result["status"] == "error"
 
     def test_transcribe_nonexistent_file(self, client):
         """Test transcription with non-existent file"""
-        response = client.post("/api/transcribe", json={"filename": "nonexistent.mp3", "language": "en"})
+        with patch("app.transcription_engine", MagicMock()):
+            response = client.post("/api/transcribe", json={"filename": "nonexistent.mp3", "language": "en"})
 
-        assert response.status_code == 404
-        result = json.loads(response.data)
-        assert result["status"] == "error"
+            assert response.status_code == 404
+            result = json.loads(response.data)
+            assert result["status"] == "error"
 
 
 @pytest.mark.api
@@ -190,13 +192,21 @@ class TestHistoryEndpoints:
         dest_file = output_folder / "download_test.txt"
         shutil.copy(sample_text_file, dest_file)
 
+        # Test view endpoint (returns JSON)
         response = client.get("/api/history/transcriptions/download_test.txt")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        assert "test transcription" in data["content"].lower()
+
+        # Test download endpoint (returns file)
+        response = client.get("/api/history/transcriptions/download_test.txt/download")
         assert response.status_code == 200
         assert b"test transcription" in response.data.lower()
 
     def test_download_nonexistent_transcription(self, client):
         """Test downloading non-existent transcription"""
-        response = client.get("/api/history/transcriptions/nonexistent.txt")
+        response = client.get("/api/history/transcriptions/nonexistent.txt/download")
         assert response.status_code == 404
 
     def test_delete_transcription(self, client, app, sample_text_file):

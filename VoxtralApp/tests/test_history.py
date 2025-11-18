@@ -99,7 +99,15 @@ class TestHistoryDownloads:
         test_content = "Test transcription content for download"
         dest_file.write_text(test_content)
 
+        # Test viewing (GET returns JSON)
         response = client.get("/api/history/transcriptions/download_test.txt")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["status"] == "success"
+        assert data["content"] == test_content
+
+        # Test downloading (GET /download returns file)
+        response = client.get("/api/history/transcriptions/download_test.txt/download")
         assert response.status_code == 200
         assert test_content.encode() in response.data
 
@@ -109,7 +117,7 @@ class TestHistoryDownloads:
 
     def test_download_nonexistent_transcription(self, client):
         """Test attempting to download non-existent transcription"""
-        response = client.get("/api/history/transcriptions/nonexistent_file.txt")
+        response = client.get("/api/history/transcriptions/nonexistent_file.txt/download")
         assert response.status_code == 404
 
     def test_download_existing_upload(self, client, app, sample_audio_file):

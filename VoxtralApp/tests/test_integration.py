@@ -71,7 +71,7 @@ class TestFileUploadWorkflow:
             trans_filename = transcriptions[0]["filename"]
 
             # Step 4: Download transcription
-            download_response = client.get(f"/api/history/transcriptions/{trans_filename}")
+            download_response = client.get(f"/api/history/transcriptions/{trans_filename}/download")
             assert download_response.status_code == 200
 
             # Step 5: Delete transcription

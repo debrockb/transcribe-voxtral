@@ -12,10 +12,10 @@ from transformers import AutoProcessor, VoxtralForConditionalGeneration
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-def transcribe_chunk(temp_chunk_path, model, processor, device, model_id):
+def transcribe_chunk(temp_chunk_path, model, processor, device, model_id, language="en"):
     """Transcribes a single audio chunk from a file path."""
     inputs = processor.apply_transcription_request(
-        language="fr", model_id=model_id, audio=temp_chunk_path, return_tensors="pt"
+        language=language, model_id=model_id, audio=temp_chunk_path, return_tensors="pt"
     )
 
     dtype = torch.bfloat16 if device == "mps" and torch.backends.mps.is_available() else torch.float32
@@ -28,9 +28,18 @@ def transcribe_chunk(temp_chunk_path, model, processor, device, model_id):
     return transcription
 
 
-def process_large_audio(input_audio_path, output_text_path, model, processor, device, model_id):
+def process_large_audio(input_audio_path, output_text_path, model, processor, device, model_id, language="en"):
     """
     Loads a large audio file, saves it in chunks, and transcribes each chunk.
+
+    Args:
+        input_audio_path: Path to input audio file
+        output_text_path: Path to save transcription
+        model: Voxtral model
+        processor: Audio processor
+        device: Device to use (mps/cuda/cpu)
+        model_id: Model identifier
+        language: Language code (default: "en")
     """
     try:
         chunk_duration_s = 2 * 60  # 2-minute chunks
@@ -56,7 +65,7 @@ def process_large_audio(input_audio_path, output_text_path, model, processor, de
 
             try:
                 print(f"--- Transcribing chunk {i + 1}/{num_chunks} ---")
-                chunk_transcription = transcribe_chunk(temp_chunk_path, model, processor, device, model_id)
+                chunk_transcription = transcribe_chunk(temp_chunk_path, model, processor, device, model_id, language)
                 all_transcriptions.append(chunk_transcription)
                 print(f'Chunk {i + 1} text: "{chunk_transcription[:100].strip()}..."')
             finally:
@@ -80,6 +89,7 @@ if __name__ == "__main__":
     INPUT_DIRECTORY = "."
     OUTPUT_SUBFOLDER_NAME = "transcriptions_voxtral_final"
     MODEL_ID = "mistralai/Voxtral-Mini-3B-2507"
+    LANGUAGE = "en"  # Default language - change to "fr", "es", etc. as needed
 
     if torch.backends.mps.is_available():
         DEVICE = "mps"
@@ -124,5 +134,6 @@ if __name__ == "__main__":
 
         print(f"\n{'=' * 60}")
         print(f"Starting transcription for: {filename}")
+        print(f"Language: {LANGUAGE}")
 
-        process_large_audio(input_path, output_path, model, processor, DEVICE, MODEL_ID)
+        process_large_audio(input_path, output_path, model, processor, DEVICE, MODEL_ID, LANGUAGE)

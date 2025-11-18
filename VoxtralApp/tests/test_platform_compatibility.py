@@ -183,8 +183,8 @@ class TestWindowsSpecific:
         """Test Windows CRLF line ending handling"""
         test_file = temp_dir / "windows_lines.txt"
 
-        # Write with Windows line endings
-        test_file.write_text("Line 1\r\nLine 2\r\nLine 3\r\n")
+        # Write with Windows line endings (binary mode to preserve exact bytes)
+        test_file.write_bytes(b"Line 1\r\nLine 2\r\nLine 3\r\n")
 
         # Verify content reads correctly
         lines = test_file.read_text().splitlines()

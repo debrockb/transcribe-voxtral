@@ -910,43 +910,57 @@ def perform_zip_update():
     """
     Perform ZIP-based update for non-git installations.
 
+    Strategy: Two-stage update to avoid Windows file lock issues:
+    1. Download and prepare new version (in-process)
+    2. Launch external script to swap directories and restart (out-of-process)
+
     Returns:
         tuple: (success: bool, message: str, data: dict)
     """
+    stage_start_time = time.time()
+
     try:
-        # Emit progress update
+        # Emit progress update with timestamps
         def emit_progress(stage, message, progress=0):
-            socketio.emit("update_progress", {"stage": stage, "message": message, "progress": progress})
-            logger.info(f"Update progress: {stage} - {message} ({progress}%)")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            socketio.emit("update_progress", {"stage": stage, "message": message, "progress": progress, "timestamp": timestamp})
+            logger.info(f"[{timestamp}] Update progress: {stage} - {message} ({progress}%)")
 
         emit_progress("checking", "Checking for updates...", 5)
+        logger.info(f"=== Starting ZIP update process === [PID: {os.getpid()}, CWD: {os.getcwd()}]")
 
         # Get update information
         update_info = check_for_updates()
         if not update_info.get("update_available"):
+            logger.info("No update available")
             return False, "No update available", {}
 
         download_url = update_info.get("download_url")
+        latest_version = update_info.get("latest_version")
         if not download_url:
+            logger.error("Download URL not available in update info")
             return False, "Download URL not available", {}
 
+        logger.info(f"Update available: {latest_version} from {download_url}")
         emit_progress("downloading", "Downloading update...", 10)
 
-        # Create temporary working directory OUTSIDE install tree to avoid path issues when moving
+        # Create temporary working directory OUTSIDE install tree
         temp_dir = Path(tempfile.mkdtemp(prefix="voxtral_update_"))
-        logger.info(f"Created temp directory: {temp_dir}")
+        logger.info(f"Created temp directory: {temp_dir} (exists: {temp_dir.exists()})")
 
         try:
-            # Download ZIP file with progress
+            # Stage 1: Download
+            download_start = time.time()
             zip_path = temp_dir / "update.zip"
-            logger.info(f"Downloading from {download_url} to {zip_path}")
+            logger.info(f"[Stage 1: Download] Starting download from {download_url}")
+            logger.info(f"  Target: {zip_path}")
 
             response = requests.get(download_url, stream=True, timeout=300)
             response.raise_for_status()
 
             total_size = int(response.headers.get("content-length", 0))
             downloaded = 0
-            last_progress = 0  # Track last emitted progress to throttle events
+            last_progress = 0
 
             with open(zip_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -954,129 +968,483 @@ def perform_zip_update():
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total_size > 0:
-                            progress = 10 + int((downloaded / total_size) * 40)  # 10-50%
-                            # Only emit if progress changed by at least 1% to avoid flooding
+                            progress = 10 + int((downloaded / total_size) * 30)  # 10-40%
                             if progress - last_progress >= 1:
                                 emit_progress("downloading", f"Downloading... {downloaded // 1024 // 1024}MB", progress)
                                 last_progress = progress
 
-            emit_progress("extracting", "Extracting files...", 55)
+            download_duration = time.time() - download_start
+            logger.info(f"[Stage 1: Download] Complete: {downloaded} bytes in {download_duration:.1f}s")
 
-            # Extract ZIP
+            # Stage 2: Extract
+            extract_start = time.time()
+            emit_progress("extracting", "Extracting files...", 45)
+            logger.info(f"[Stage 2: Extract] Starting extraction")
+
             extract_dir = temp_dir / "extracted"
             extract_dir.mkdir(exist_ok=True)
 
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(extract_dir)
 
-            # Find the extracted folder (GitHub creates a folder like "debrockb-transcribe-voxtral-<hash>")
             extracted_folders = list(extract_dir.iterdir())
             if not extracted_folders:
+                logger.error("[Stage 2: Extract] Extracted archive is empty")
                 return False, "Extracted archive is empty", {}
 
-            source_folder = extracted_folders[0]
-            logger.info(f"Extracted to {source_folder}")
+            new_install_dir = extracted_folders[0]
+            extract_duration = time.time() - extract_start
+            logger.info(f"[Stage 2: Extract] Complete in {extract_duration:.1f}s")
+            logger.info(f"  New installation directory: {new_install_dir} (exists: {new_install_dir.exists()})")
 
-            emit_progress("backing_up", "Backing up user data...", 60)
+            # Stage 3: Merge config
+            config_start = time.time()
+            emit_progress("configuring", "Merging configuration...", 55)
+            logger.info(f"[Stage 3: Config] Merging configuration files")
 
-            # Preserve user data
-            backup_dir = temp_dir / "backup"
-            backup_dir.mkdir(exist_ok=True)
+            old_config_path = BASE_DIR / "config.json"
+            new_config_path = new_install_dir / "VoxtralApp" / "config.json"
 
-            # Backup config, recordings, uploads, outputs, and transcriptions
-            user_data_paths = [
-                ("VoxtralApp/config.json", "config.json"),
-                ("VoxtralApp/uploads", "uploads"),
-                ("VoxtralApp/output", "output"),
-                ("VoxtralApp/recordings", "recordings"),
-                ("VoxtralApp/transcriptions_voxtral_final", "transcriptions"),  # CRITICAL: actual transcription storage
+            def deep_merge_config(old_dict, new_dict):
+                """
+                Recursively merge old config into new config, preserving user settings.
+                Strategy:
+                - Start with new_dict (contains new schema and defaults)
+                - For each key in old_dict:
+                  - If value is a dict and exists in new_dict, recursively merge
+                  - If value is primitive, preserve old value (user preference)
+                  - Skip preserving app.version (always use new version)
+                """
+                merged = new_dict.copy()
+
+                for key, old_value in old_dict.items():
+                    # Special case: never preserve app.version (always use new)
+                    if key == "app":
+                        if isinstance(old_value, dict) and isinstance(merged.get(key), dict):
+                            # Preserve other app settings but not version
+                            app_merged = merged[key].copy()
+                            for app_key, app_old_value in old_value.items():
+                                if app_key != "version":
+                                    app_merged[app_key] = app_old_value
+                            merged[key] = app_merged
+                        continue
+
+                    # If key exists in new config
+                    if key in merged:
+                        new_value = merged[key]
+                        # Both are dicts: recursively merge
+                        if isinstance(old_value, dict) and isinstance(new_value, dict):
+                            merged[key] = deep_merge_config(old_value, new_value)
+                        # Old value is primitive: preserve user setting
+                        else:
+                            merged[key] = old_value
+                    # Key doesn't exist in new config: preserve anyway (backward compat)
+                    else:
+                        merged[key] = old_value
+
+                return merged
+
+            if old_config_path.exists() and new_config_path.exists():
+                try:
+                    import json
+
+                    # Load both configs
+                    with open(old_config_path, "r", encoding="utf-8") as f:
+                        old_config = json.load(f)
+                    with open(new_config_path, "r", encoding="utf-8") as f:
+                        new_config = json.load(f)
+
+                    # Deep merge: preserve ALL user settings
+                    merged_config = deep_merge_config(old_config, new_config)
+
+                    # Log what was preserved
+                    if "model" in old_config and "version" in old_config["model"]:
+                        logger.info(f"  Preserved user model selection: {old_config['model']['version']}")
+
+                    preserved_keys = []
+                    for key in old_config.keys():
+                        if key != "app":  # app.version is always from new
+                            preserved_keys.append(key)
+                    if preserved_keys:
+                        logger.info(f"  Preserved user settings from: {', '.join(preserved_keys)}")
+
+                    # Write merged config
+                    with open(new_config_path, "w", encoding="utf-8") as f:
+                        json.dump(merged_config, f, indent=2)
+
+                    logger.info(f"  Config merged successfully (new version: {merged_config.get('app', {}).get('version', 'unknown')})")
+                except Exception as e:
+                    logger.warning(f"  Config merge failed, using new config: {e}")
+
+            config_duration = time.time() - config_start
+            logger.info(f"[Stage 3: Config] Complete in {config_duration:.1f}s")
+
+            # Stage 4: Copy user data
+            data_start = time.time()
+            emit_progress("migrating", "Migrating user data...", 65)
+            logger.info(f"[Stage 4: Data Migration] Copying user data to new installation")
+            logger.info(f"  Source: {BASE_DIR}")
+            logger.info(f"  Destination: {new_install_dir / 'VoxtralApp'}")
+
+            user_data_dirs = [
+                "uploads",
+                "output",
+                "recordings",
+                "transcriptions_voxtral_final",
             ]
 
-            for rel_path, backup_name in user_data_paths:
-                src = BASE_DIR.parent / rel_path
+            files_copied = 0
+            for dir_name in user_data_dirs:
+                src = BASE_DIR / dir_name
+                dst = new_install_dir / "VoxtralApp" / dir_name
+
+                logger.info(f"  Processing: {dir_name}")
+                logger.info(f"    From: {src} (exists: {src.exists()})")
+                logger.info(f"    To: {dst}")
+
                 if src.exists():
-                    dst = backup_dir / backup_name
-                    if src.is_file():
-                        shutil.copy2(src, dst)
-                    else:
-                        shutil.copytree(src, dst, dirs_exist_ok=True)
-                    logger.info(f"Backed up {rel_path}")
-
-            emit_progress("installing", "Installing update...", 70)
-
-            # Atomically replace installation
-            install_root = BASE_DIR.parent
-            backup_root = install_root.parent / f"{install_root.name}-backup-{int(time.time())}"
-
-            # Rename current installation to backup
-            logger.info(f"Backing up current installation to {backup_root}")
-            shutil.move(str(install_root), str(backup_root))
-
-            try:
-                # Move new version into place
-                logger.info(f"Moving {source_folder} to {install_root}")
-                shutil.move(str(source_folder), str(install_root))
-
-                emit_progress("restoring", "Restoring user data...", 80)
-
-                # Restore user data
-                for rel_path, backup_name in user_data_paths:
-                    src = backup_dir / backup_name
-                    if src.exists():
-                        dst = BASE_DIR.parent / rel_path
-                        dst.parent.mkdir(parents=True, exist_ok=True)
+                    try:
                         if src.is_file():
+                            dst.parent.mkdir(parents=True, exist_ok=True)
                             shutil.copy2(src, dst)
+                            logger.info(f"    ✓ Copied file: {dir_name}")
+                            files_copied += 1
                         else:
                             shutil.copytree(src, dst, dirs_exist_ok=True)
-                        logger.info(f"Restored {rel_path}")
+                            file_count = len(list(src.rglob("*")))
+                            logger.info(f"    ✓ Copied directory: {dir_name} ({file_count} items)")
+                            files_copied += file_count
+                    except Exception as e:
+                        logger.error(f"    ✗ Failed to copy {dir_name}: {e}")
+                        raise
+                else:
+                    logger.info(f"    - Skipped (does not exist)")
 
-                emit_progress("dependencies", "Updating dependencies...", 85)
+            data_duration = time.time() - data_start
+            logger.info(f"[Stage 4: Data Migration] Complete in {data_duration:.1f}s ({files_copied} items copied)")
 
-                # Update dependencies
-                requirements_file = BASE_DIR / "requirements.txt"
-                if requirements_file.exists():
-                    if sys.platform == "win32":
-                        pip_exe = BASE_DIR / "voxtral_env" / "Scripts" / "pip.exe"
-                    else:
-                        pip_exe = BASE_DIR / "voxtral_env" / "bin" / "pip"
+            # Stage 5: Create updater script
+            script_start = time.time()
+            emit_progress("preparing", "Preparing update script...", 75)
+            logger.info(f"[Stage 5: Script] Creating platform-specific updater script")
 
-                    if pip_exe.exists():
-                        pip_result = subprocess.run(
-                            [str(pip_exe), "install", "-r", str(requirements_file), "--upgrade"],
-                            capture_output=True,
-                            text=True,
-                            timeout=300,
-                        )
-                        if pip_result.returncode != 0:
-                            logger.warning(f"Pip install warnings: {pip_result.stderr}")
+            install_root = BASE_DIR.parent
+            backup_dir = install_root.parent / f"{install_root.name}-backup-{int(time.time())}"
 
-                emit_progress("complete", "Update complete!", 100)
+            logger.info(f"  Current installation: {install_root} (exists: {install_root.exists()})")
+            logger.info(f"  New installation: {new_install_dir} (exists: {new_install_dir.exists()})")
+            logger.info(f"  Backup location: {backup_dir}")
 
-                # Clean up temp directory
-                shutil.rmtree(temp_dir, ignore_errors=True)
+            if sys.platform == "win32":
+                # Windows batch script with robocopy for reliability
+                script_path = temp_dir / "voxtral_updater.bat"
+                log_path = temp_dir / "voxtral_updater.log"
+                failed_marker = install_root / ".UPDATE_FAILED"
+                launcher_script = install_root / "Start Voxtral Web - Windows.bat"
+                pid = os.getpid()
 
-                return True, f"Updated to version {update_info['latest_version']}", {"backup_path": str(backup_root)}
+                script_content = f"""@echo off
+setlocal enabledelayedexpansion
+set LOG_FILE={log_path}
+set FAILED_MARKER={failed_marker}
+set BACKUP_DIR={backup_dir}
+set INSTALL_ROOT={install_root}
+set NEW_DIR={new_install_dir}
+set LAUNCHER={launcher_script}
 
-            except Exception as e:
-                # Rollback: restore backup
-                logger.error(f"Update failed, rolling back: {e}")
-                if install_root.exists():
-                    shutil.rmtree(install_root, ignore_errors=True)
-                shutil.move(str(backup_root), str(install_root))
-                raise
+echo Voxtral Update Script > "%LOG_FILE%"
+echo ===================== >> "%LOG_FILE%"
+echo Started: %DATE% %TIME% >> "%LOG_FILE%"
+echo PID: {pid} >> "%LOG_FILE%"
+echo. >> "%LOG_FILE%"
 
-        finally:
-            # Clean up temp directory
+echo Voxtral Update Script
+echo =====================
+echo Log: %LOG_FILE%
+
+REM Wait for Flask process to exit (up to 120 seconds)
+echo Waiting for application (PID {pid})...
+echo Waiting for Flask {pid}... >> "%LOG_FILE%"
+
+set /a WAIT_COUNT=0
+:WAIT_LOOP
+tasklist /FI "PID eq {pid}" 2>nul | find /I "{pid}" >nul
+if errorlevel 1 goto PROCESS_EXITED
+
+set /a WAIT_COUNT+=1
+if %WAIT_COUNT% GTR 120 (
+    echo WARNING: Still waiting after 120s >> "%LOG_FILE%"
+    goto PROCESS_EXITED
+)
+timeout /t 1 /nobreak >nul
+goto WAIT_LOOP
+
+:PROCESS_EXITED
+echo Process exited after %WAIT_COUNT%s >> "%LOG_FILE%"
+echo Application closed
+
+REM Clean old backup
+if exist "%BACKUP_DIR%" rmdir /S /Q "%BACKUP_DIR%" 2>>"%LOG_FILE%"
+
+REM Backup using robocopy (better than move for locked files)
+echo Backing up...
+robocopy "%INSTALL_ROOT%" "%BACKUP_DIR%" /MIR /R:3 /W:1 /NFL /NDL /NJH /NJS >> "%LOG_FILE%" 2>&1
+if errorlevel 8 (
+    echo ERROR: Backup failed >> "%LOG_FILE%"
+    echo Update failed: Backup failed > "%FAILED_MARKER%"
+    echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
+    echo ERROR: Backup failed
+    pause
+    exit /b 1
+)
+echo Backup complete >> "%LOG_FILE%"
+
+REM Delete current installation
+echo Removing current...
+rmdir /S /Q "%INSTALL_ROOT%" 2>>"%LOG_FILE%"
+if exist "%INSTALL_ROOT%" (
+    echo ERROR: Could not delete >> "%LOG_FILE%"
+    echo Update failed: Could not delete current installation > "%FAILED_MARKER%"
+    echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
+    pause
+    exit /b 1
+)
+
+REM Install new version using robocopy
+echo Installing new...
+robocopy "%NEW_DIR%" "%INSTALL_ROOT%" /E /R:10 /W:2 /NFL /NDL /NJH /NJS >> "%LOG_FILE%" 2>&1
+if errorlevel 8 (
+    echo ERROR: Install failed, restoring... >> "%LOG_FILE%"
+    rmdir /S /Q "%INSTALL_ROOT%" 2>>"%LOG_FILE%"
+    robocopy "%BACKUP_DIR%" "%INSTALL_ROOT%" /MIR /R:3 /W:1 >> "%LOG_FILE%" 2>&1
+    echo Update failed: Installation failed > "%FAILED_MARKER%"
+    echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
+    echo ERROR: Install failed
+    pause
+    exit /b 1
+)
+echo Install complete >> "%LOG_FILE%"
+
+REM Clean temp
+rmdir /S /Q "%NEW_DIR%" 2>>"%LOG_FILE%"
+
+REM Restart via launcher script
+echo Restarting...
+echo Starting "%LAUNCHER%"... >> "%LOG_FILE%"
+
+if exist "%LAUNCHER%" (
+    start "" "%LAUNCHER%"
+) else (
+    echo WARNING: Launcher not found >> "%LOG_FILE%"
+    cd /d "%INSTALL_ROOT%\\VoxtralApp"
+    start "" voxtral_env\\Scripts\\python.exe app.py
+)
+
+echo Completed: %DATE% %TIME% >> "%LOG_FILE%"
+echo Update successful!
+timeout /t 2 /nobreak >nul
+exit
+"""
+            else:
+                # Mac/Linux shell script with rsync for reliability
+                script_path = temp_dir / "voxtral_updater.sh"
+                log_path = temp_dir / "voxtral_updater.log"
+                failed_marker = install_root / ".UPDATE_FAILED"
+                launcher_script = install_root / "VoxtralApp" / "start_web.sh"
+                pid = os.getpid()
+
+                script_content = f"""#!/bin/bash
+LOG_FILE="{log_path}"
+FAILED_MARKER="{failed_marker}"
+BACKUP_DIR="{backup_dir}"
+INSTALL_ROOT="{install_root}"
+NEW_DIR="{new_install_dir}"
+LAUNCHER="{launcher_script}"
+
+echo "Voxtral Update Script" > "$LOG_FILE"
+echo "=====================" >> "$LOG_FILE"
+echo "Started: $(date)" >> "$LOG_FILE"
+echo "PID: {pid}" >> "$LOG_FILE"
+echo "" >> "$LOG_FILE"
+
+echo "Voxtral Update Script"
+echo "Log: $LOG_FILE"
+
+# Wait for Flask process to exit (up to 120 seconds)
+echo "Waiting for application (PID {pid})..."
+echo "Waiting for Flask {pid}..." >> "$LOG_FILE"
+
+WAIT_COUNT=0
+while kill -0 {pid} 2>/dev/null; do
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+    if [ $WAIT_COUNT -ge 120 ]; then
+        echo "WARNING: Still waiting after 120s" >> "$LOG_FILE"
+        break
+    fi
+    sleep 1
+done
+
+echo "Process exited after ${{WAIT_COUNT}}s" >> "$LOG_FILE"
+echo "Application closed"
+
+# Clean old backup
+[ -d "$BACKUP_DIR" ] && rm -rf "$BACKUP_DIR" 2>>"$LOG_FILE"
+
+# Backup using rsync (better than mv for reliability)
+echo "Backing up..."
+mkdir -p "$BACKUP_DIR"
+rsync -a --delete "$INSTALL_ROOT/" "$BACKUP_DIR/" >> "$LOG_FILE" 2>&1
+if [ $? -ne 0 ]; then
+    echo "ERROR: Backup failed" >> "$LOG_FILE"
+    echo "Update failed: Backup failed" > "$FAILED_MARKER"
+    echo "Log: $LOG_FILE" >> "$FAILED_MARKER"
+    echo "ERROR: Backup failed"
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+echo "Backup complete" >> "$LOG_FILE"
+
+# Delete current installation
+echo "Removing current..."
+rm -rf "$INSTALL_ROOT" 2>>"$LOG_FILE"
+if [ -d "$INSTALL_ROOT" ]; then
+    echo "ERROR: Could not delete" >> "$LOG_FILE"
+    echo "Update failed: Could not delete current installation" > "$FAILED_MARKER"
+    echo "Log: $LOG_FILE" >> "$FAILED_MARKER"
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+
+# Install new version using rsync
+echo "Installing new..."
+mkdir -p "$INSTALL_ROOT"
+rsync -a --delete "$NEW_DIR/" "$INSTALL_ROOT/" >> "$LOG_FILE" 2>&1
+if [ $? -ne 0 ]; then
+    echo "ERROR: Install failed, restoring..." >> "$LOG_FILE"
+    rm -rf "$INSTALL_ROOT" 2>>"$LOG_FILE"
+    rsync -a --delete "$BACKUP_DIR/" "$INSTALL_ROOT/" >> "$LOG_FILE" 2>&1
+    echo "Update failed: Installation failed" > "$FAILED_MARKER"
+    echo "Log: $LOG_FILE" >> "$FAILED_MARKER"
+    echo "ERROR: Install failed"
+    read -p "Press Enter to exit..."
+    exit 1
+fi
+echo "Install complete" >> "$LOG_FILE"
+
+# Clean temp
+rm -rf "$NEW_DIR" 2>>"$LOG_FILE"
+
+# Restart via launcher script
+echo "Restarting..."
+echo "Starting $LAUNCHER..." >> "$LOG_FILE"
+
+if [ -f "$LAUNCHER" ]; then
+    cd "$INSTALL_ROOT/VoxtralApp"
+    bash "$LAUNCHER" &
+else
+    echo "WARNING: Launcher not found" >> "$LOG_FILE"
+    cd "$INSTALL_ROOT/VoxtralApp"
+    ./voxtral_env/bin/python app.py &
+fi
+
+echo "Completed: $(date)" >> "$LOG_FILE"
+echo "Update successful!"
+sleep 2
+exit 0
+"""
+
+            # Write script
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(script_content)
+
+            # Make executable on Unix
+            if sys.platform != "win32":
+                script_path.chmod(0o755)
+
+            script_duration = time.time() - script_start
+            logger.info(f"[Stage 5: Script] Complete in {script_duration:.1f}s")
+            logger.info(f"  Script created: {script_path}")
+            logger.info(f"  Log will be written to: {log_path}")
+
+            # Log the full script content for debugging
+            logger.info("=== BEGIN UPDATER SCRIPT ===")
+            script_lines = script_content.split("\n")
+            for i, line in enumerate(script_lines[:50], 1):  # Log first 50 lines
+                logger.info(f"  {i:3d}: {line}")
+            if len(script_lines) > 50:
+                remaining = len(script_lines) - 50
+                logger.info(f"  ... ({remaining} more lines)")
+            logger.info("=== END UPDATER SCRIPT ===")
+
+            emit_progress("launching", "Launching updater...", 90)
+            logger.info(f"[Stage 6: Launch] Launching external updater script")
+            logger.info(f"  Script: {script_path}")
+            logger.info(f"  Process will exit, updater will take over")
+
+            # Launch updater script
+            if sys.platform == "win32":
+                subprocess.Popen(["cmd", "/c", str(script_path)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            else:
+                subprocess.Popen(["/bin/bash", str(script_path)])
+
+            total_duration = time.time() - stage_start_time
+            logger.info(f"=== Update preparation complete in {total_duration:.1f}s ===")
+            logger.info(f"  Download: {download_duration:.1f}s")
+            logger.info(f"  Extract: {extract_duration:.1f}s")
+            logger.info(f"  Config merge: {config_duration:.1f}s")
+            logger.info(f"  Data migration: {data_duration:.1f}s")
+            logger.info(f"  Script creation: {script_duration:.1f}s")
+            logger.info(f"External updater launched, this process will now exit in 2 seconds...")
+
+            emit_progress("complete", "Update ready! Restarting...", 100)
+
+            # Give the response time to send, then exit
+            def exit_for_update():
+                time.sleep(2)  # Increased from 1 to 2 seconds
+                logger.info("Exiting for update (PID: {os.getpid()})...")
+                os._exit(0)
+
+            threading.Thread(target=exit_for_update, daemon=True).start()
+
+            return (
+                True,
+                f"Update to {latest_version} prepared. Application restarting...",
+                {"backup_path": str(backup_dir), "script_path": str(script_path), "log_path": str(log_path)},
+            )
+
+        except PermissionError as e:
+            # Specific handling for permission errors
+            logger.error(f"[Permission Error] {e}", exc_info=True)
+            logger.error(f"  Failed path: {e.filename if hasattr(e, 'filename') else 'unknown'}")
+            logger.error(f"  Process ID: {os.getpid()}, CWD: {os.getcwd()}")
+
+            # Try to list open files
+            try:
+                process = psutil.Process()
+                open_files = process.open_files()
+                logger.error(f"  Open files ({len(open_files)}):")
+                for f in open_files[:10]:  # Limit to first 10
+                    logger.error(f"    - {f.path}")
+            except Exception:
+                pass
+
+            return False, f"Permission denied: Windows cannot move files while they are in use. Please close the application and run the update script manually.", {}
+
+        except Exception as e:
+            # General error handling
+            logger.exception(f"[Update Failed] {e}")
             if temp_dir.exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     except requests.exceptions.RequestException as e:
+        logger.error(f"Download failed: {e}")
         return False, f"Download failed: {str(e)}", {}
-    except zipfile.BadZipFile:
+    except zipfile.BadZipFile as e:
+        logger.error(f"Invalid ZIP archive: {e}")
         return False, "Downloaded file is not a valid ZIP archive", {}
     except Exception as e:
-        logger.error(f"ZIP update failed: {e}", exc_info=True)
+        logger.exception(f"ZIP update failed: {e}")
         return False, f"Update failed: {str(e)}", {}
 
 
@@ -1310,6 +1678,27 @@ def initialize_engine(model_version=None):
 if __name__ == "__main__":
     # DON'T load the model on startup - let users select it first!
     # Model will be loaded after user selection in the web UI
+
+    # Check for failed update marker
+    install_root = BASE_DIR.parent
+    failed_marker = install_root / ".UPDATE_FAILED"
+    if failed_marker.exists():
+        try:
+            error_msg = failed_marker.read_text(encoding="utf-8")
+            logger.error("=" * 80)
+            logger.error("UPDATE FAILED - Previous update attempt encountered an error:")
+            logger.error("-" * 80)
+            for line in error_msg.strip().split("\n"):
+                logger.error(f"  {line}")
+            logger.error("-" * 80)
+            logger.error("Please check the log file for details and try updating again.")
+            logger.error("If the problem persists, please report it at:")
+            logger.error("  https://github.com/debrockb/transcribe-voxtral/issues")
+            logger.error("=" * 80)
+            # Remove marker file after displaying (so we don't spam on every startup)
+            failed_marker.unlink()
+        except Exception as e:
+            logger.warning(f"Failed to read update error marker: {e}")
 
     # Start memory monitoring
     start_memory_monitor()

@@ -542,19 +542,24 @@ async function installUpdate() {
 
 /**
  * Handle update progress from WebSocket
- * Shows real-time progress of ZIP-based updates
+ * Shows real-time progress of ZIP-based updates with timestamps
  */
 let lastUpdateStage = null;  // Track stage to avoid duplicate toasts
+let updateProgressLog = [];  // Store all progress events for debugging
 
 function handleUpdateProgress(data) {
-    console.log('Update progress:', data);
+    const { stage, message, progress, timestamp } = data;
 
-    const { stage, message, progress } = data;
+    // Log with timestamp for debugging
+    const logEntry = `[${timestamp || 'N/A'}] ${stage}: ${message} (${progress}%)`;
+    console.log('Update progress:', logEntry);
+    updateProgressLog.push(logEntry);
 
-    // Update button text with progress
+    // Update button text with progress and timestamp
     const btn = elements.installUpdateBtn;
     if (btn) {
-        btn.textContent = `${message} (${progress}%)`;
+        const displayText = timestamp ? `${message} @ ${timestamp}` : message;
+        btn.textContent = `${displayText} (${progress}%)`;
     }
 
     // Only show toast when stage CHANGES (not on every progress update)
@@ -563,17 +568,27 @@ function handleUpdateProgress(data) {
             checking: 'Checking for updates...',
             downloading: 'Downloading update files...',
             extracting: 'Extracting files...',
+            configuring: 'Merging configuration...',
+            migrating: 'Migrating user data...',
             backing_up: 'Backing up your data...',
+            preparing: 'Preparing update script...',
             installing: 'Installing update...',
             restoring: 'Restoring your data...',
             dependencies: 'Updating dependencies...',
-            complete: 'Update complete!'
+            launching: 'Launching updater...',
+            complete: 'Update ready! Application restarting...'
         };
 
         if (stageMessages[stage]) {
-            showToast(stageMessages[stage], stage === 'complete' ? 'success' : 'info');
+            const toastMsg = timestamp ? `${stageMessages[stage]} @ ${timestamp}` : stageMessages[stage];
+            showToast(toastMsg, stage === 'complete' ? 'success' : 'info');
             lastUpdateStage = stage;
         }
+    }
+
+    // Log all progress events to console for support debugging
+    if (updateProgressLog.length <= 100) {  // Prevent memory leak
+        console.log('Update Progress Log:', updateProgressLog);
     }
 }
 

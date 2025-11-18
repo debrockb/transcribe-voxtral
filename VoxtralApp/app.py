@@ -916,9 +916,9 @@ def perform_zip_update():
 
         emit_progress("downloading", "Downloading update...", 10)
 
-        # Create temporary working directory
-        temp_dir = BASE_DIR.parent / "updates" / f"temp_{uuid.uuid4().hex[:8]}"
-        temp_dir.mkdir(parents=True, exist_ok=True)
+        # Create temporary working directory OUTSIDE install tree to avoid path issues when moving
+        temp_dir = Path(tempfile.mkdtemp(prefix="voxtral_update_"))
+        logger.info(f"Created temp directory: {temp_dir}")
 
         try:
             # Download ZIP file with progress
@@ -930,6 +930,7 @@ def perform_zip_update():
 
             total_size = int(response.headers.get("content-length", 0))
             downloaded = 0
+            last_progress = 0  # Track last emitted progress to throttle events
 
             with open(zip_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -938,7 +939,10 @@ def perform_zip_update():
                         downloaded += len(chunk)
                         if total_size > 0:
                             progress = 10 + int((downloaded / total_size) * 40)  # 10-50%
-                            emit_progress("downloading", f"Downloading... {downloaded // 1024 // 1024}MB", progress)
+                            # Only emit if progress changed by at least 1% to avoid flooding
+                            if progress - last_progress >= 1:
+                                emit_progress("downloading", f"Downloading... {downloaded // 1024 // 1024}MB", progress)
+                                last_progress = progress
 
             emit_progress("extracting", "Extracting files...", 55)
 

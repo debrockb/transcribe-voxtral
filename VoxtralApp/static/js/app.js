@@ -544,6 +544,8 @@ async function installUpdate() {
  * Handle update progress from WebSocket
  * Shows real-time progress of ZIP-based updates
  */
+let lastUpdateStage = null;  // Track stage to avoid duplicate toasts
+
 function handleUpdateProgress(data) {
     console.log('Update progress:', data);
 
@@ -555,20 +557,23 @@ function handleUpdateProgress(data) {
         btn.textContent = `${message} (${progress}%)`;
     }
 
-    // Show progress toast based on stage
-    const stageMessages = {
-        checking: 'Checking for updates...',
-        downloading: 'Downloading update files...',
-        extracting: 'Extracting files...',
-        backing_up: 'Backing up your data...',
-        installing: 'Installing update...',
-        restoring: 'Restoring your data...',
-        dependencies: 'Updating dependencies...',
-        complete: 'Update complete!'
-    };
+    // Only show toast when stage CHANGES (not on every progress update)
+    if (stage !== lastUpdateStage) {
+        const stageMessages = {
+            checking: 'Checking for updates...',
+            downloading: 'Downloading update files...',
+            extracting: 'Extracting files...',
+            backing_up: 'Backing up your data...',
+            installing: 'Installing update...',
+            restoring: 'Restoring your data...',
+            dependencies: 'Updating dependencies...',
+            complete: 'Update complete!'
+        };
 
-    if (stageMessages[stage]) {
-        showToast(message, stage === 'complete' ? 'success' : 'info');
+        if (stageMessages[stage]) {
+            showToast(stageMessages[stage], stage === 'complete' ? 'success' : 'info');
+            lastUpdateStage = stage;
+        }
     }
 }
 

@@ -284,6 +284,7 @@ class TestWebSocketEvents:
         socketio_client.disconnect()
         assert not socketio_client.is_connected()
 
+    @pytest.mark.requires_model
     @patch('app.transcription_engine')
     def test_progress_updates(self, mock_engine, socketio_client):
         """Test receiving progress updates via WebSocket"""

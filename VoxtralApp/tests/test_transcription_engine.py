@@ -12,6 +12,7 @@ from transcription_engine import TranscriptionEngine
 
 
 @pytest.mark.unit
+@pytest.mark.requires_model
 class TestTranscriptionEngine:
     """Test cases for TranscriptionEngine functionality"""
 

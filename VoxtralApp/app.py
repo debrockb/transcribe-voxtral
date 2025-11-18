@@ -157,6 +157,22 @@ def transcribe_in_background(job_id, file_path, language, output_path):
         })
 
 
+# Helper functions for consistent API responses
+def error_response(message, status_code=400):
+    """Return a standardized error response."""
+    return jsonify({'status': 'error', 'message': message}), status_code
+
+
+def success_response(data=None, message=None):
+    """Return a standardized success response."""
+    response = {'status': 'success'}
+    if message:
+        response['message'] = message
+    if data:
+        response.update(data)
+    return jsonify(response)
+
+
 # Routes
 
 @app.route('/')
@@ -166,19 +182,28 @@ def index():
     return render_template('index.html', device_info=device_info)
 
 
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring."""
+    return jsonify({
+        'status': 'ok',
+        'message': 'Voxtral transcription service is running'
+    })
+
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     """Handle file upload."""
     if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+        return jsonify({'status': 'error', 'message': 'No file provided'}), 400
 
     file = request.files['file']
 
     if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
+        return jsonify({'status': 'error', 'message': 'No file selected'}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'error': f'File type not supported. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+        return jsonify({'status': 'error', 'message': f'File type not allowed. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
 
     try:
         # Generate unique file ID
@@ -210,7 +235,8 @@ def upload_file():
         return jsonify({
             'status': 'success',
             'file_id': file_id,
-            'filename': original_filename,
+            'filename': unique_filename,  # Return actual saved filename (UUID)
+            'original_filename': original_filename,  # Also include original for reference
             'size': file_size,
             'size_mb': uploaded_files[file_id]['size_mb'],
             'is_video': uploaded_files[file_id]['is_video']
@@ -218,7 +244,7 @@ def upload_file():
 
     except Exception as e:
         logger.error(f"Upload error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/transcribe', methods=['POST'])
@@ -226,10 +252,28 @@ def start_transcription():
     """Start transcription job."""
     data = request.json
     file_id = data.get('file_id')
+    filename = data.get('filename')
     language = data.get('language', 'en')
 
-    if not file_id or file_id not in uploaded_files:
-        return jsonify({'error': 'Invalid file ID'}), 400
+    # Support both file_id and filename
+    if filename and not file_id:
+        # Look up file_id by filename
+        for fid, finfo in uploaded_files.items():
+            if finfo.get('filename') == filename or finfo.get('original_filename') == filename:
+                file_id = fid
+                break
+
+        # If filename was provided but not found, return 404
+        if not file_id:
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
+    # If neither filename nor file_id provided
+    if not file_id:
+        return jsonify({'status': 'error', 'message': 'Missing file ID or filename'}), 400
+
+    # If file_id provided but doesn't exist
+    if file_id not in uploaded_files:
+        return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
     try:
         file_info = uploaded_files[file_id]
@@ -240,7 +284,7 @@ def start_transcription():
             audio_path = UPLOAD_FOLDER / f"{file_id}_audio.wav"
 
             if not convert_video_to_audio(file_path, audio_path):
-                return jsonify({'error': 'Failed to convert video to audio'}), 500
+                return jsonify({'status': 'error', 'message': 'Failed to convert video to audio'}), 500
 
             # Update file path to converted audio
             file_path = audio_path
@@ -282,14 +326,14 @@ def start_transcription():
 
     except Exception as e:
         logger.error(f"Transcription start error: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/status/<job_id>', methods=['GET'])
 def get_status(job_id):
     """Get transcription job status."""
     if job_id not in jobs:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
     return jsonify(jobs[job_id])
 
@@ -298,12 +342,12 @@ def get_status(job_id):
 def get_transcript(job_id):
     """Get completed transcript."""
     if job_id not in jobs:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
     job = jobs[job_id]
 
     if job['status'] != 'complete':
-        return jsonify({'error': 'Transcription not complete'}), 400
+        return jsonify({'status': 'error', 'message': 'Transcription not complete'}), 400
 
     return jsonify({
         'job_id': job_id,
@@ -320,17 +364,17 @@ def get_transcript(job_id):
 def download_transcript(job_id):
     """Download transcript as text file."""
     if job_id not in jobs:
-        return jsonify({'error': 'Job not found'}), 404
+        return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
     job = jobs[job_id]
 
     if job['status'] != 'complete':
-        return jsonify({'error': 'Transcription not complete'}), 400
+        return jsonify({'status': 'error', 'message': 'Transcription not complete'}), 400
 
     output_path = job.get('output_path')
 
     if not output_path or not Path(output_path).exists():
-        return jsonify({'error': 'Transcript file not found'}), 404
+        return jsonify({'status': 'error', 'message': 'Transcript file not found'}), 404
 
     return send_file(output_path, as_attachment=True)
 
@@ -378,7 +422,7 @@ def get_device_info():
     """Get device information."""
     if transcription_engine:
         return jsonify(transcription_engine.get_device_info())
-    return jsonify({'error': 'Engine not initialized'}), 503
+    return jsonify({'status': 'error', 'message': 'Engine not initialized'}), 503
 
 
 @app.route('/api/history/transcriptions', methods=['GET'])
@@ -403,32 +447,23 @@ def list_transcriptions():
 
     except Exception as e:
         logger.error(f"Error listing transcriptions: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/history/transcriptions/<filename>', methods=['GET'])
 def get_transcription_content(filename):
-    """Get content of a specific transcription."""
+    """Download a specific transcription file."""
     try:
         file_path = OUTPUT_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'error': 'File not found'}), 404
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        return jsonify({
-            'filename': filename,
-            'content': content,
-            'size': file_path.stat().st_size,
-            'word_count': len(content.split()),
-            'char_count': len(content)
-        })
+        return send_file(file_path, as_attachment=True, download_name=filename)
 
     except Exception as e:
-        logger.error(f"Error reading transcription {filename}: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error downloading transcription {filename}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/history/transcriptions/<filename>', methods=['DELETE'])
@@ -438,7 +473,7 @@ def delete_transcription(filename):
         file_path = OUTPUT_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'error': 'File not found'}), 404
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
         file_path.unlink()
         logger.info(f"Deleted transcription: {filename}")
@@ -447,7 +482,7 @@ def delete_transcription(filename):
 
     except Exception as e:
         logger.error(f"Error deleting transcription {filename}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/history/transcriptions/all', methods=['DELETE'])
@@ -465,7 +500,7 @@ def delete_all_transcriptions():
 
     except Exception as e:
         logger.error(f"Error deleting all transcriptions: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/history/uploads', methods=['GET'])
@@ -491,7 +526,23 @@ def list_uploads():
 
     except Exception as e:
         logger.error(f"Error listing uploads: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/history/uploads/<filename>', methods=['GET'])
+def download_upload(filename):
+    """Download a specific uploaded file."""
+    try:
+        file_path = UPLOAD_FOLDER / filename
+
+        if not file_path.exists():
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+
+        return send_file(file_path, as_attachment=True, download_name=filename)
+
+    except Exception as e:
+        logger.error(f"Error downloading upload {filename}: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/history/uploads/<filename>', methods=['DELETE'])
@@ -501,7 +552,7 @@ def delete_upload(filename):
         file_path = UPLOAD_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'error': 'File not found'}), 404
+            return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
         file_path.unlink()
         logger.info(f"Deleted upload: {filename}")
@@ -510,7 +561,7 @@ def delete_upload(filename):
 
     except Exception as e:
         logger.error(f"Error deleting upload {filename}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/history/uploads/all', methods=['DELETE'])
@@ -529,7 +580,7 @@ def delete_all_uploads():
 
     except Exception as e:
         logger.error(f"Error deleting all uploads: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 # WebSocket events

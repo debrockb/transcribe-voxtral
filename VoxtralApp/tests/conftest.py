@@ -12,12 +12,31 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Mock heavy dependencies BEFORE importing app to prevent model loading
-# This is critical for CI/CD environments without GPU
-os.environ['TESTING'] = '1'  # Signal to app.py that we're in test mode
+# Mock heavy dependencies BEFORE any imports
+# This is critical for CI/CD environments without GPU/torch
+os.environ['TESTING'] = '1'
 
+# Mock torch and transformers at module level BEFORE importing app
+import sys
+from unittest.mock import MagicMock
 
-# Import app AFTER setting up environment
+# Create mock modules
+sys.modules['torch'] = MagicMock()
+sys.modules['torch.cuda'] = MagicMock()
+sys.modules['torch.backends'] = MagicMock()
+sys.modules['torch.backends.mps'] = MagicMock()
+sys.modules['transformers'] = MagicMock()
+sys.modules['transformers.models'] = MagicMock()
+sys.modules['transformers.models.whisper'] = MagicMock()
+sys.modules['librosa'] = MagicMock()
+sys.modules['soundfile'] = MagicMock()
+sys.modules['accelerate'] = MagicMock()
+
+# Configure torch mocks
+sys.modules['torch'].cuda.is_available = MagicMock(return_value=False)
+sys.modules['torch'].backends.mps.is_available = MagicMock(return_value=False)
+
+# Now safe to import app
 from app import app as flask_app, socketio
 
 

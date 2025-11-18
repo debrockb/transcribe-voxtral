@@ -295,6 +295,7 @@ class TestPlatformDetection:
         assert version.major == 3
         assert version.minor >= 9
 
+    @pytest.mark.requires_model
     @patch('transcription_engine.torch')
     def test_device_detection_per_platform(self, mock_torch):
         """Test that device detection works correctly on each platform"""

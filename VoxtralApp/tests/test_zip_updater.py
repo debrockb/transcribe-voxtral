@@ -324,16 +324,16 @@ class TestZipUpdater:
             script_content = script_path.read_text()
 
             # Verify critical components in script
-            assert "robocopy" in script_content.lower()
+            assert "move" in script_content.lower()
             assert "tasklist" in script_content
             assert ".UPDATE_FAILED" in script_content
             assert "Start Voxtral Web - Windows.bat" in script_content
-            # Verify retry logic for file lock handling
-            assert "DELETE_RETRY" in script_content
+            # Verify retry logic for file lock handling (now uses MOVE_RETRY)
+            assert "MOVE_RETRY" in script_content
             assert "RETRY_COUNT" in script_content
             assert "Waiting for locks" in script_content
             # Verify recovery instructions in UPDATE_FAILED
-            assert "TO RECOVER:" in script_content
+            assert "TROUBLESHOOTING:" in script_content
 
     @patch("app.sys.platform", "darwin")
     @patch("app.check_for_updates")

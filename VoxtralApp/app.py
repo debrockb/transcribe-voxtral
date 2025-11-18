@@ -1248,78 +1248,79 @@ goto WAIT_LOOP
 echo Process exited after %WAIT_COUNT%s >> "%LOG_FILE%"
 echo Application closed
 
-REM Wait additional 5 seconds for Windows to release file locks
+REM Wait additional 10 seconds for Windows to release file locks
 echo Waiting for file locks to release... >> "%LOG_FILE%"
-timeout /t 5 /nobreak >nul
+timeout /t 10 /nobreak >nul
 
-REM Clean old backup
-if exist "%BACKUP_DIR%" rmdir /S /Q "%BACKUP_DIR%" 2>>"%LOG_FILE%"
+REM Clean old backup if exists
+if exist "%BACKUP_DIR%" (
+    echo Cleaning old backup... >> "%LOG_FILE%"
+    rmdir /S /Q "%BACKUP_DIR%" 2>>"%LOG_FILE%"
+)
 
-REM Backup using robocopy (better than move for locked files)
-echo Backing up...
-robocopy "%INSTALL_ROOT%" "%BACKUP_DIR%" /MIR /R:3 /W:1 /NFL /NDL /NJH /NJS >> "%LOG_FILE%" 2>&1
-if errorlevel 8 (
-    echo ERROR: Backup failed >> "%LOG_FILE%"
-    echo Update failed: Backup failed > "%FAILED_MARKER%"
+REM NEW APPROACH: Use MOVE (rename) instead of DELETE
+REM Windows can rename locked directories even when it can't delete them
+echo Moving current to backup...
+set /a RETRY_COUNT=0
+:MOVE_RETRY
+move "%INSTALL_ROOT%" "%BACKUP_DIR%" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+    set /a RETRY_COUNT+=1
+    if %RETRY_COUNT% LEQ 30 (
+        echo Retry %RETRY_COUNT%/30: Waiting for locks... >> "%LOG_FILE%"
+        timeout /t 2 /nobreak >nul
+        goto MOVE_RETRY
+    )
+    echo ERROR: Could not move after 30 retries >> "%LOG_FILE%"
+    echo Update failed: Could not move current installation > "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
+    echo Windows file locks prevented moving directory. >> "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
+    echo TROUBLESHOOTING: >> "%FAILED_MARKER%"
+    echo 1. Close all applications that might access files: >> "%FAILED_MARKER%"
+    echo    - Windows Explorer windows showing this folder >> "%FAILED_MARKER%"
+    echo    - Any text editors with files open from this folder >> "%FAILED_MARKER%"
+    echo    - Antivirus or backup software >> "%FAILED_MARKER%"
+    echo 2. Restart your computer to release all file locks >> "%FAILED_MARKER%"
+    echo 3. Run the update again after restart >> "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
+    echo MANUAL RECOVERY (if restart doesn't help): >> "%FAILED_MARKER%"
+    echo 1. Download the latest version from GitHub >> "%FAILED_MARKER%"
+    echo 2. Extract to a NEW location >> "%FAILED_MARKER%"
+    echo 3. Copy your config.json and data folders to the new location >> "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
     echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
-    echo ERROR: Backup failed
+    echo.
+    echo ERROR: Could not move current installation
+    echo.
+    echo File locks prevented installation. Please see .UPDATE_FAILED file.
     pause
     exit /b 1
 )
-echo Backup complete >> "%LOG_FILE%"
+echo Move complete >> "%LOG_FILE%"
 
-REM Delete current installation with retry logic
-echo Removing current...
+REM Move new version into place with retry
+echo Installing new version...
 set /a RETRY_COUNT=0
-:DELETE_RETRY
-rmdir /S /Q "%INSTALL_ROOT%" 2>>"%LOG_FILE%"
-if exist "%INSTALL_ROOT%" (
+:INSTALL_RETRY
+move "%NEW_DIR%" "%INSTALL_ROOT%" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
     set /a RETRY_COUNT+=1
     if %RETRY_COUNT% LEQ 10 (
-        echo Retry %RETRY_COUNT%/10: Waiting for locks... >> "%LOG_FILE%"
+        echo Retry %RETRY_COUNT%/10: Waiting... >> "%LOG_FILE%"
         timeout /t 2 /nobreak >nul
-        goto DELETE_RETRY
+        goto INSTALL_RETRY
     )
-    echo ERROR: Could not delete after 10 retries >> "%LOG_FILE%"
-    echo Update failed: Could not delete current installation > "%FAILED_MARKER%"
-    echo. >> "%FAILED_MARKER%"
-    echo Windows file locks prevented deletion. >> "%FAILED_MARKER%"
-    echo Your new version is ready in: %BACKUP_DIR% >> "%FAILED_MARKER%"
-    echo. >> "%FAILED_MARKER%"
-    echo TO RECOVER: >> "%FAILED_MARKER%"
-    echo 1. Restart Windows to release all file locks >> "%FAILED_MARKER%"
-    echo 2. Delete this directory: %INSTALL_ROOT% >> "%FAILED_MARKER%"
-    echo 3. Rename to: %INSTALL_ROOT% >> "%FAILED_MARKER%"
-    echo    From: %BACKUP_DIR% >> "%FAILED_MARKER%"
-    echo 4. Run: Start Voxtral Web - Windows.bat >> "%FAILED_MARKER%"
-    echo. >> "%FAILED_MARKER%"
-    echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
-    echo.
-    echo ERROR: Could not delete current installation
-    echo.
-    echo Your new version is ready but file locks prevented installation.
-    echo Please see UPDATE_FAILED file for recovery instructions.
-    pause
-    exit /b 1
-)
-
-REM Install new version using robocopy
-echo Installing new...
-robocopy "%NEW_DIR%" "%INSTALL_ROOT%" /E /R:10 /W:2 /NFL /NDL /NJH /NJS >> "%LOG_FILE%" 2>&1
-if errorlevel 8 (
     echo ERROR: Install failed, restoring... >> "%LOG_FILE%"
-    rmdir /S /Q "%INSTALL_ROOT%" 2>>"%LOG_FILE%"
-    robocopy "%BACKUP_DIR%" "%INSTALL_ROOT%" /MIR /R:3 /W:1 >> "%LOG_FILE%" 2>&1
-    echo Update failed: Installation failed > "%FAILED_MARKER%"
+    move "%BACKUP_DIR%" "%INSTALL_ROOT%" >> "%LOG_FILE%" 2>&1
+    echo Update failed: Could not install new version > "%FAILED_MARKER%"
+    echo Restored from backup. >> "%FAILED_MARKER%"
     echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
-    echo ERROR: Install failed
+    echo ERROR: Install failed, restored from backup
     pause
     exit /b 1
 )
 echo Install complete >> "%LOG_FILE%"
-
-REM Clean temp
-rmdir /S /Q "%NEW_DIR%" 2>>"%LOG_FILE%"
 
 REM Restart via launcher script
 echo Restarting...
@@ -1335,7 +1336,10 @@ if exist "%LAUNCHER%" (
 
 echo Completed: %DATE% %TIME% >> "%LOG_FILE%"
 echo Update successful!
-timeout /t 2 /nobreak >nul
+echo.
+echo Old version backed up to: %BACKUP_DIR%
+echo You can safely delete the backup folder once you verify the update works.
+timeout /t 3 /nobreak >nul
 exit
 """
             else:

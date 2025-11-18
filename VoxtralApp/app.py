@@ -4,16 +4,17 @@ Flask-based web interface for audio transcription using Voxtral AI
 Cross-platform compatible (Windows & macOS)
 """
 
-import os
-from pathlib import Path
-import uuid
-import threading
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_file
-from flask_socketio import SocketIO, emit
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
 import logging
+import os
+import threading
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+from flask import Flask, jsonify, render_template, request, send_file
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
+from werkzeug.utils import secure_filename
 
 from transcription_engine import TranscriptionEngine
 
@@ -21,7 +22,7 @@ from transcription_engine import TranscriptionEngine
 BASE_DIR = Path(__file__).parent
 UPLOAD_FOLDER = BASE_DIR / "uploads"
 OUTPUT_FOLDER = BASE_DIR / "transcriptions_voxtral_final"
-ALLOWED_EXTENSIONS = {'wav', 'mp3', 'flac', 'm4a', 'mp4', 'avi', 'mov'}
+ALLOWED_EXTENSIONS = {"wav", "mp3", "flac", "m4a", "mp4", "avi", "mov"}
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 
 # Ensure directories exist (cross-platform)
@@ -30,13 +31,13 @@ OUTPUT_FOLDER.mkdir(exist_ok=True)
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'voxtral-transcription-secret-key'
-app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
-app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+app.config["SECRET_KEY"] = "voxtral-transcription-secret-key"
+app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
+app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
 
 # Enable CORS and SocketIO
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -52,17 +53,17 @@ transcription_engine = None
 
 def allowed_file(filename):
     """Check if file extension is allowed."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def get_file_extension(filename):
     """Get file extension in lowercase."""
-    return filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    return filename.rsplit(".", 1)[1].lower() if "." in filename else ""
 
 
 def is_video_file(filename):
     """Check if file is a video format."""
-    video_extensions = {'mp4', 'avi', 'mov', 'mkv'}
+    video_extensions = {"mp4", "avi", "mov", "mkv"}
     return get_file_extension(filename) in video_extensions
 
 
@@ -76,7 +77,7 @@ def convert_video_to_audio(video_path, output_audio_path):
 
         logger.info(f"Converting video to audio: {video_path}")
         video = VideoFileClip(str(video_path))
-        video.audio.write_audiofile(str(output_audio_path), codec='pcm_s16le')
+        video.audio.write_audiofile(str(output_audio_path), codec="pcm_s16le")
         video.close()
         logger.info(f"Video converted successfully: {output_audio_path}")
         return True
@@ -91,10 +92,7 @@ def progress_callback(job_id, data):
         jobs[job_id].update(data)
 
         # Emit progress via WebSocket
-        socketio.emit('transcription_progress', {
-            'job_id': job_id,
-            **data
-        })
+        socketio.emit("transcription_progress", {"job_id": job_id, **data})
 
 
 def transcribe_in_background(job_id, file_path, language, output_path):
@@ -105,69 +103,59 @@ def transcribe_in_background(job_id, file_path, language, output_path):
             progress_callback(job_id, data)
 
         # Update engine callback
-        global transcription_engine
         transcription_engine.progress_callback = callback
 
         # Start transcription
         result = transcription_engine.transcribe_file(
-            input_audio_path=str(file_path),
-            output_text_path=str(output_path),
-            language=language
+            input_audio_path=str(file_path), output_text_path=str(output_path), language=language
         )
 
-        if result['status'] == 'success':
-            jobs[job_id].update({
-                'status': 'complete',
-                'transcript': result['transcript'],
-                'duration': result['duration_minutes'],
-                'word_count': result['word_count'],
-                'char_count': result['char_count'],
-                'completed_at': datetime.now().isoformat()
-            })
+        if result["status"] == "success":
+            jobs[job_id].update(
+                {
+                    "status": "complete",
+                    "transcript": result["transcript"],
+                    "duration": result["duration_minutes"],
+                    "word_count": result["word_count"],
+                    "char_count": result["char_count"],
+                    "completed_at": datetime.now().isoformat(),
+                }
+            )
 
-            socketio.emit('transcription_complete', {
-                'job_id': job_id,
-                'transcript': result['transcript'],
-                'duration': result['duration_minutes'],
-                'word_count': result['word_count']
-            })
+            socketio.emit(
+                "transcription_complete",
+                {
+                    "job_id": job_id,
+                    "transcript": result["transcript"],
+                    "duration": result["duration_minutes"],
+                    "word_count": result["word_count"],
+                },
+            )
         else:
-            jobs[job_id].update({
-                'status': 'error',
-                'error': result.get('error', 'Unknown error')
-            })
+            jobs[job_id].update({"status": "error", "error": result.get("error", "Unknown error")})
 
-            socketio.emit('transcription_error', {
-                'job_id': job_id,
-                'error': result.get('error', 'Unknown error')
-            })
+            socketio.emit("transcription_error", {"job_id": job_id, "error": result.get("error", "Unknown error")})
 
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Transcription error for job {job_id}: {error_msg}")
 
-        jobs[job_id].update({
-            'status': 'error',
-            'error': error_msg
-        })
+        jobs[job_id].update({"status": "error", "error": error_msg})
 
-        socketio.emit('transcription_error', {
-            'job_id': job_id,
-            'error': error_msg
-        })
+        socketio.emit("transcription_error", {"job_id": job_id, "error": error_msg})
 
 
 # Helper functions for consistent API responses
 def error_response(message, status_code=400):
     """Return a standardized error response."""
-    return jsonify({'status': 'error', 'message': message}), status_code
+    return jsonify({"status": "error", "message": message}), status_code
 
 
 def success_response(data=None, message=None):
     """Return a standardized success response."""
-    response = {'status': 'success'}
+    response = {"status": "success"}
     if message:
-        response['message'] = message
+        response["message"] = message
     if data:
         response.update(data)
     return jsonify(response)
@@ -175,35 +163,36 @@ def success_response(data=None, message=None):
 
 # Routes
 
-@app.route('/')
+
+@app.route("/")
 def index():
     """Serve the main application page."""
     device_info = transcription_engine.get_device_info() if transcription_engine else {}
-    return render_template('index.html', device_info=device_info)
+    return render_template("index.html", device_info=device_info)
 
 
-@app.route('/api/health', methods=['GET'])
+@app.route("/api/health", methods=["GET"])
 def health_check():
     """Health check endpoint for monitoring."""
-    return jsonify({
-        'status': 'ok',
-        'message': 'Voxtral transcription service is running'
-    })
+    return jsonify({"status": "ok", "message": "Voxtral transcription service is running"})
 
 
-@app.route('/api/upload', methods=['POST'])
+@app.route("/api/upload", methods=["POST"])
 def upload_file():
     """Handle file upload."""
-    if 'file' not in request.files:
-        return jsonify({'status': 'error', 'message': 'No file provided'}), 400
+    if "file" not in request.files:
+        return jsonify({"status": "error", "message": "No file provided"}), 400
 
-    file = request.files['file']
+    file = request.files["file"]
 
-    if file.filename == '':
-        return jsonify({'status': 'error', 'message': 'No file selected'}), 400
+    if file.filename == "":
+        return jsonify({"status": "error", "message": "No file selected"}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'status': 'error', 'message': f'File type not allowed. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+        return (
+            jsonify({"status": "error", "message": f'File type not allowed. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}'}),
+            400,
+        )
 
     try:
         # Generate unique file ID
@@ -220,71 +209,73 @@ def upload_file():
 
         # Store file metadata
         uploaded_files[file_id] = {
-            'file_id': file_id,
-            'original_filename': original_filename,
-            'filename': unique_filename,
-            'path': str(file_path),
-            'size': file_size,
-            'size_mb': round(file_size / (1024 * 1024), 2),
-            'is_video': is_video_file(original_filename),
-            'uploaded_at': datetime.now().isoformat()
+            "file_id": file_id,
+            "original_filename": original_filename,
+            "filename": unique_filename,
+            "path": str(file_path),
+            "size": file_size,
+            "size_mb": round(file_size / (1024 * 1024), 2),
+            "is_video": is_video_file(original_filename),
+            "uploaded_at": datetime.now().isoformat(),
         }
 
         logger.info(f"File uploaded: {original_filename} ({file_size} bytes)")
 
-        return jsonify({
-            'status': 'success',
-            'file_id': file_id,
-            'filename': unique_filename,  # Return actual saved filename (UUID)
-            'original_filename': original_filename,  # Also include original for reference
-            'size': file_size,
-            'size_mb': uploaded_files[file_id]['size_mb'],
-            'is_video': uploaded_files[file_id]['is_video']
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "file_id": file_id,
+                "filename": unique_filename,  # Return actual saved filename (UUID)
+                "original_filename": original_filename,  # Also include original for reference
+                "size": file_size,
+                "size_mb": uploaded_files[file_id]["size_mb"],
+                "is_video": uploaded_files[file_id]["is_video"],
+            }
+        )
 
     except Exception as e:
         logger.error(f"Upload error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/transcribe', methods=['POST'])
-def start_transcription():
+@app.route("/api/transcribe", methods=["POST"])
+def start_transcription():  # noqa: C901
     """Start transcription job."""
     data = request.json
-    file_id = data.get('file_id')
-    filename = data.get('filename')
-    language = data.get('language', 'en')
+    file_id = data.get("file_id")
+    filename = data.get("filename")
+    language = data.get("language", "en")
 
     # Support both file_id and filename
     if filename and not file_id:
         # Look up file_id by filename
         for fid, finfo in uploaded_files.items():
-            if finfo.get('filename') == filename or finfo.get('original_filename') == filename:
+            if finfo.get("filename") == filename or finfo.get("original_filename") == filename:
                 file_id = fid
                 break
 
         # If filename was provided but not found, return 404
         if not file_id:
-            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+            return jsonify({"status": "error", "message": "File not found"}), 404
 
     # If neither filename nor file_id provided
     if not file_id:
-        return jsonify({'status': 'error', 'message': 'Missing file ID or filename'}), 400
+        return jsonify({"status": "error", "message": "Missing file ID or filename"}), 400
 
     # If file_id provided but doesn't exist
     if file_id not in uploaded_files:
-        return jsonify({'status': 'error', 'message': 'File not found'}), 404
+        return jsonify({"status": "error", "message": "File not found"}), 404
 
     try:
         file_info = uploaded_files[file_id]
-        file_path = Path(file_info['path'])
+        file_path = Path(file_info["path"])
 
         # If video, convert to audio first
-        if file_info['is_video']:
+        if file_info["is_video"]:
             audio_path = UPLOAD_FOLDER / f"{file_id}_audio.wav"
 
             if not convert_video_to_audio(file_path, audio_path):
-                return jsonify({'status': 'error', 'message': 'Failed to convert video to audio'}), 500
+                return jsonify({"status": "error", "message": "Failed to convert video to audio"}), 500
 
             # Update file path to converted audio
             file_path = audio_path
@@ -296,306 +287,306 @@ def start_transcription():
 
         # Create job entry
         jobs[job_id] = {
-            'job_id': job_id,
-            'file_id': file_id,
-            'filename': file_info['original_filename'],
-            'language': language,
-            'status': 'queued',
-            'progress': 0,
-            'current_chunk': 0,
-            'total_chunks': 0,
-            'started_at': datetime.now().isoformat(),
-            'output_path': str(output_path)
+            "job_id": job_id,
+            "file_id": file_id,
+            "filename": file_info["original_filename"],
+            "language": language,
+            "status": "queued",
+            "progress": 0,
+            "current_chunk": 0,
+            "total_chunks": 0,
+            "started_at": datetime.now().isoformat(),
+            "output_path": str(output_path),
         }
 
         # Start transcription in background thread
-        thread = threading.Thread(
-            target=transcribe_in_background,
-            args=(job_id, file_path, language, output_path)
-        )
+        thread = threading.Thread(target=transcribe_in_background, args=(job_id, file_path, language, output_path))
         thread.daemon = True
         thread.start()
 
         logger.info(f"Transcription job started: {job_id} for file {file_info['original_filename']}")
 
-        return jsonify({
-            'status': 'success',
-            'job_id': job_id,
-            'message': 'Transcription started'
-        })
+        return jsonify({"status": "success", "job_id": job_id, "message": "Transcription started"})
 
     except Exception as e:
         logger.error(f"Transcription start error: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/status/<job_id>', methods=['GET'])
+@app.route("/api/status/<job_id>", methods=["GET"])
 def get_status(job_id):
     """Get transcription job status."""
     if job_id not in jobs:
-        return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        return jsonify({"status": "error", "message": "Job not found"}), 404
 
     return jsonify(jobs[job_id])
 
 
-@app.route('/api/transcript/<job_id>', methods=['GET'])
+@app.route("/api/transcript/<job_id>", methods=["GET"])
 def get_transcript(job_id):
     """Get completed transcript."""
     if job_id not in jobs:
-        return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        return jsonify({"status": "error", "message": "Job not found"}), 404
 
     job = jobs[job_id]
 
-    if job['status'] != 'complete':
-        return jsonify({'status': 'error', 'message': 'Transcription not complete'}), 400
+    if job["status"] != "complete":
+        return jsonify({"status": "error", "message": "Transcription not complete"}), 400
 
-    return jsonify({
-        'job_id': job_id,
-        'transcript': job.get('transcript', ''),
-        'filename': job.get('filename', ''),
-        'language': job.get('language', ''),
-        'duration': job.get('duration', 0),
-        'word_count': job.get('word_count', 0),
-        'char_count': job.get('char_count', 0)
-    })
+    return jsonify(
+        {
+            "job_id": job_id,
+            "transcript": job.get("transcript", ""),
+            "filename": job.get("filename", ""),
+            "language": job.get("language", ""),
+            "duration": job.get("duration", 0),
+            "word_count": job.get("word_count", 0),
+            "char_count": job.get("char_count", 0),
+        }
+    )
 
 
-@app.route('/api/transcript/<job_id>/download', methods=['GET'])
+@app.route("/api/transcript/<job_id>/download", methods=["GET"])
 def download_transcript(job_id):
     """Download transcript as text file."""
     if job_id not in jobs:
-        return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        return jsonify({"status": "error", "message": "Job not found"}), 404
 
     job = jobs[job_id]
 
-    if job['status'] != 'complete':
-        return jsonify({'status': 'error', 'message': 'Transcription not complete'}), 400
+    if job["status"] != "complete":
+        return jsonify({"status": "error", "message": "Transcription not complete"}), 400
 
-    output_path = job.get('output_path')
+    output_path = job.get("output_path")
 
     if not output_path or not Path(output_path).exists():
-        return jsonify({'status': 'error', 'message': 'Transcript file not found'}), 404
+        return jsonify({"status": "error", "message": "Transcript file not found"}), 404
 
     return send_file(output_path, as_attachment=True)
 
 
-@app.route('/api/languages', methods=['GET'])
+@app.route("/api/languages", methods=["GET"])
 def get_languages():
     """Get list of supported languages."""
     languages = [
-        {'code': 'en', 'name': 'English'},
-        {'code': 'fr', 'name': 'French'},
-        {'code': 'es', 'name': 'Spanish'},
-        {'code': 'de', 'name': 'German'},
-        {'code': 'it', 'name': 'Italian'},
-        {'code': 'pt', 'name': 'Portuguese'},
-        {'code': 'nl', 'name': 'Dutch'},
-        {'code': 'pl', 'name': 'Polish'},
-        {'code': 'ru', 'name': 'Russian'},
-        {'code': 'zh', 'name': 'Chinese'},
-        {'code': 'ja', 'name': 'Japanese'},
-        {'code': 'ko', 'name': 'Korean'},
-        {'code': 'ar', 'name': 'Arabic'},
-        {'code': 'hi', 'name': 'Hindi'},
-        {'code': 'tr', 'name': 'Turkish'},
-        {'code': 'sv', 'name': 'Swedish'},
-        {'code': 'da', 'name': 'Danish'},
-        {'code': 'no', 'name': 'Norwegian'},
-        {'code': 'fi', 'name': 'Finnish'},
-        {'code': 'cs', 'name': 'Czech'},
-        {'code': 'sk', 'name': 'Slovak'},
-        {'code': 'uk', 'name': 'Ukrainian'},
-        {'code': 'ro', 'name': 'Romanian'},
-        {'code': 'el', 'name': 'Greek'},
-        {'code': 'he', 'name': 'Hebrew'},
-        {'code': 'id', 'name': 'Indonesian'},
-        {'code': 'vi', 'name': 'Vietnamese'},
-        {'code': 'th', 'name': 'Thai'},
-        {'code': 'ms', 'name': 'Malay'},
-        {'code': 'ca', 'name': 'Catalan'},
+        {"code": "en", "name": "English"},
+        {"code": "fr", "name": "French"},
+        {"code": "es", "name": "Spanish"},
+        {"code": "de", "name": "German"},
+        {"code": "it", "name": "Italian"},
+        {"code": "pt", "name": "Portuguese"},
+        {"code": "nl", "name": "Dutch"},
+        {"code": "pl", "name": "Polish"},
+        {"code": "ru", "name": "Russian"},
+        {"code": "zh", "name": "Chinese"},
+        {"code": "ja", "name": "Japanese"},
+        {"code": "ko", "name": "Korean"},
+        {"code": "ar", "name": "Arabic"},
+        {"code": "hi", "name": "Hindi"},
+        {"code": "tr", "name": "Turkish"},
+        {"code": "sv", "name": "Swedish"},
+        {"code": "da", "name": "Danish"},
+        {"code": "no", "name": "Norwegian"},
+        {"code": "fi", "name": "Finnish"},
+        {"code": "cs", "name": "Czech"},
+        {"code": "sk", "name": "Slovak"},
+        {"code": "uk", "name": "Ukrainian"},
+        {"code": "ro", "name": "Romanian"},
+        {"code": "el", "name": "Greek"},
+        {"code": "he", "name": "Hebrew"},
+        {"code": "id", "name": "Indonesian"},
+        {"code": "vi", "name": "Vietnamese"},
+        {"code": "th", "name": "Thai"},
+        {"code": "ms", "name": "Malay"},
+        {"code": "ca", "name": "Catalan"},
     ]
     return jsonify(languages)
 
 
-@app.route('/api/device-info', methods=['GET'])
+@app.route("/api/device-info", methods=["GET"])
 def get_device_info():
     """Get device information."""
     if transcription_engine:
         return jsonify(transcription_engine.get_device_info())
-    return jsonify({'status': 'error', 'message': 'Engine not initialized'}), 503
+    return jsonify({"status": "error", "message": "Engine not initialized"}), 503
 
 
-@app.route('/api/history/transcriptions', methods=['GET'])
+@app.route("/api/history/transcriptions", methods=["GET"])
 def list_transcriptions():
     """List all saved transcriptions."""
     try:
         transcriptions = []
         if OUTPUT_FOLDER.exists():
-            for file_path in OUTPUT_FOLDER.glob('*.txt'):
+            for file_path in OUTPUT_FOLDER.glob("*.txt"):
                 stat = file_path.stat()
-                transcriptions.append({
-                    'filename': file_path.name,
-                    'size': stat.st_size,
-                    'size_kb': round(stat.st_size / 1024, 2),
-                    'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
-                })
+                transcriptions.append(
+                    {
+                        "filename": file_path.name,
+                        "size": stat.st_size,
+                        "size_kb": round(stat.st_size / 1024, 2),
+                        "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    }
+                )
 
         # Sort by modified date (newest first)
-        transcriptions.sort(key=lambda x: x['modified'], reverse=True)
+        transcriptions.sort(key=lambda x: x["modified"], reverse=True)
         return jsonify(transcriptions)
 
     except Exception as e:
         logger.error(f"Error listing transcriptions: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/transcriptions/<filename>', methods=['GET'])
+@app.route("/api/history/transcriptions/<filename>", methods=["GET"])
 def get_transcription_content(filename):
     """Download a specific transcription file."""
     try:
         file_path = OUTPUT_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+            return jsonify({"status": "error", "message": "File not found"}), 404
 
         return send_file(file_path, as_attachment=True, download_name=filename)
 
     except Exception as e:
         logger.error(f"Error downloading transcription {filename}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/transcriptions/<filename>', methods=['DELETE'])
+@app.route("/api/history/transcriptions/<filename>", methods=["DELETE"])
 def delete_transcription(filename):
     """Delete a specific transcription."""
     try:
         file_path = OUTPUT_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+            return jsonify({"status": "error", "message": "File not found"}), 404
 
         file_path.unlink()
         logger.info(f"Deleted transcription: {filename}")
 
-        return jsonify({'status': 'success', 'message': f'Deleted {filename}'})
+        return jsonify({"status": "success", "message": f"Deleted {filename}"})
 
     except Exception as e:
         logger.error(f"Error deleting transcription {filename}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/transcriptions/all', methods=['DELETE'])
+@app.route("/api/history/transcriptions/all", methods=["DELETE"])
 def delete_all_transcriptions():
     """Delete all transcriptions."""
     try:
         count = 0
         if OUTPUT_FOLDER.exists():
-            for file_path in OUTPUT_FOLDER.glob('*.txt'):
+            for file_path in OUTPUT_FOLDER.glob("*.txt"):
                 file_path.unlink()
                 count += 1
 
         logger.info(f"Deleted {count} transcriptions")
-        return jsonify({'status': 'success', 'count': count, 'message': f'Deleted {count} transcriptions'})
+        return jsonify({"status": "success", "count": count, "message": f"Deleted {count} transcriptions"})
 
     except Exception as e:
         logger.error(f"Error deleting all transcriptions: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/uploads', methods=['GET'])
+@app.route("/api/history/uploads", methods=["GET"])
 def list_uploads():
     """List all uploaded files."""
     try:
         uploads = []
         if UPLOAD_FOLDER.exists():
-            for file_path in UPLOAD_FOLDER.glob('*'):
+            for file_path in UPLOAD_FOLDER.glob("*"):
                 if file_path.is_file():
                     stat = file_path.stat()
-                    uploads.append({
-                        'filename': file_path.name,
-                        'size': stat.st_size,
-                        'size_mb': round(stat.st_size / (1024 * 1024), 2),
-                        'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                        'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
-                    })
+                    uploads.append(
+                        {
+                            "filename": file_path.name,
+                            "size": stat.st_size,
+                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                            "created": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        }
+                    )
 
         # Sort by modified date (newest first)
-        uploads.sort(key=lambda x: x['modified'], reverse=True)
+        uploads.sort(key=lambda x: x["modified"], reverse=True)
         return jsonify(uploads)
 
     except Exception as e:
         logger.error(f"Error listing uploads: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/uploads/<filename>', methods=['GET'])
+@app.route("/api/history/uploads/<filename>", methods=["GET"])
 def download_upload(filename):
     """Download a specific uploaded file."""
     try:
         file_path = UPLOAD_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+            return jsonify({"status": "error", "message": "File not found"}), 404
 
         return send_file(file_path, as_attachment=True, download_name=filename)
 
     except Exception as e:
         logger.error(f"Error downloading upload {filename}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/uploads/<filename>', methods=['DELETE'])
+@app.route("/api/history/uploads/<filename>", methods=["DELETE"])
 def delete_upload(filename):
     """Delete a specific uploaded file."""
     try:
         file_path = UPLOAD_FOLDER / filename
 
         if not file_path.exists():
-            return jsonify({'status': 'error', 'message': 'File not found'}), 404
+            return jsonify({"status": "error", "message": "File not found"}), 404
 
         file_path.unlink()
         logger.info(f"Deleted upload: {filename}")
 
-        return jsonify({'status': 'success', 'message': f'Deleted {filename}'})
+        return jsonify({"status": "success", "message": f"Deleted {filename}"})
 
     except Exception as e:
         logger.error(f"Error deleting upload {filename}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/history/uploads/all', methods=['DELETE'])
+@app.route("/api/history/uploads/all", methods=["DELETE"])
 def delete_all_uploads():
     """Delete all uploaded files."""
     try:
         count = 0
         if UPLOAD_FOLDER.exists():
-            for file_path in UPLOAD_FOLDER.glob('*'):
+            for file_path in UPLOAD_FOLDER.glob("*"):
                 if file_path.is_file():
                     file_path.unlink()
                     count += 1
 
         logger.info(f"Deleted {count} uploads")
-        return jsonify({'status': 'success', 'count': count, 'message': f'Deleted {count} uploads'})
+        return jsonify({"status": "success", "count": count, "message": f"Deleted {count} uploads"})
 
     except Exception as e:
         logger.error(f"Error deleting all uploads: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # WebSocket events
 
-@socketio.on('connect')
+
+@socketio.on("connect")
 def handle_connect():
     """Handle client connection."""
-    logger.info('Client connected')
-    emit('connected', {'message': 'Connected to Voxtral server'})
+    logger.info("Client connected")
+    emit("connected", {"message": "Connected to Voxtral server"})
 
 
-@socketio.on('disconnect')
+@socketio.on("disconnect")
 def handle_disconnect():
     """Handle client disconnection."""
-    logger.info('Client disconnected')
+    logger.info("Client disconnected")
 
 
 def initialize_engine():
@@ -603,9 +594,10 @@ def initialize_engine():
     global transcription_engine
 
     # Skip model loading in test mode (saves memory and time in CI/CD)
-    if os.environ.get('TESTING') == '1':
+    if os.environ.get("TESTING") == "1":
         logger.info("Test mode detected - skipping model initialization")
         from unittest.mock import MagicMock
+
         transcription_engine = MagicMock()
         transcription_engine.device = "cpu"
         transcription_engine.transcribe_file = MagicMock(return_value=None)
@@ -620,14 +612,14 @@ def initialize_engine():
         raise
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Initialize engine before starting server
     initialize_engine()
 
     # Start Flask-SocketIO server
     # Using port 8000 as port 5000 is often used by macOS AirPlay Receiver
-    port = int(os.environ.get('PORT', 8000))
+    port = int(os.environ.get("PORT", 8000))
     logger.info(f"Starting Voxtral Web Application on port {port}...")
     logger.info(f"Access the application at: http://localhost:{port}")
 
-    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", port=port, debug=True, allow_unsafe_werkzeug=True)

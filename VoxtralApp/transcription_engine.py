@@ -4,17 +4,18 @@ Refactored version of transcribe_voxtral.py for web application use
 Supports progress callbacks and is designed for cross-platform compatibility (Windows & macOS)
 """
 
+import logging
 import os
+import tempfile
+import warnings
 from pathlib import Path
-import torch
+from typing import Callable, Dict, Optional
+
 import librosa
 import numpy as np
-from transformers import AutoProcessor, VoxtralForConditionalGeneration
-import warnings
 import soundfile as sf
-import tempfile
-from typing import Callable, Optional, Dict
-import logging
+import torch
+from transformers import AutoProcessor, VoxtralForConditionalGeneration
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -34,7 +35,7 @@ class TranscriptionEngine:
         self,
         model_id: str = "mistralai/Voxtral-Mini-3B-2507",
         device: Optional[str] = None,
-        progress_callback: Optional[Callable[[Dict], None]] = None
+        progress_callback: Optional[Callable[[Dict], None]] = None,
     ):
         """
         Initialize the transcription engine.
@@ -68,36 +69,28 @@ class TranscriptionEngine:
     def _load_model(self):
         """Load the Voxtral model and processor."""
         try:
-            self._emit_progress({
-                "status": "loading_model",
-                "message": f"Loading model '{self.model_id}'...",
-                "progress": 0
-            })
+            self._emit_progress({"status": "loading_model", "message": f"Loading model '{self.model_id}'...", "progress": 0})
 
             self.processor = AutoProcessor.from_pretrained(self.model_id)
             self.model = VoxtralForConditionalGeneration.from_pretrained(
-                self.model_id,
-                torch_dtype=self.dtype,
-                device_map=self.device
+                self.model_id, torch_dtype=self.dtype, device_map=self.device
             )
 
-            self._emit_progress({
-                "status": "model_loaded",
-                "message": "Model loaded successfully",
-                "progress": 0,
-                "device": self.device.upper()
-            })
+            self._emit_progress(
+                {
+                    "status": "model_loaded",
+                    "message": "Model loaded successfully",
+                    "progress": 0,
+                    "device": self.device.upper(),
+                }
+            )
 
             logger.info("Model and processor loaded successfully")
 
         except Exception as e:
             error_msg = f"Failed to load model: {str(e)}"
             logger.error(error_msg)
-            self._emit_progress({
-                "status": "error",
-                "message": error_msg,
-                "error": str(e)
-            })
+            self._emit_progress({"status": "error", "message": error_msg, "error": str(e)})
             raise
 
     def _emit_progress(self, data: Dict):
@@ -108,11 +101,7 @@ class TranscriptionEngine:
             except Exception as e:
                 logger.warning(f"Progress callback error: {e}")
 
-    def _transcribe_chunk(
-        self,
-        temp_chunk_path: str,
-        language: str
-    ) -> str:
+    def _transcribe_chunk(self, temp_chunk_path: str, language: str) -> str:
         """
         Transcribe a single audio chunk.
 
@@ -124,10 +113,7 @@ class TranscriptionEngine:
             Transcribed text
         """
         inputs = self.processor.apply_transcription_request(
-            language=language,
-            model_id=self.model_id,
-            audio=temp_chunk_path,
-            return_tensors="pt"
+            language=language, model_id=self.model_id, audio=temp_chunk_path, return_tensors="pt"
         )
 
         inputs = inputs.to(self.device, dtype=self.dtype)
@@ -139,11 +125,7 @@ class TranscriptionEngine:
         return transcription
 
     def transcribe_file(
-        self,
-        input_audio_path: str,
-        output_text_path: str,
-        language: str = "en",
-        chunk_duration_s: int = 120  # 2 minutes
+        self, input_audio_path: str, output_text_path: str, language: str = "en", chunk_duration_s: int = 120  # 2 minutes
     ) -> Dict:
         """
         Transcribe a complete audio file with chunking.
@@ -167,11 +149,9 @@ class TranscriptionEngine:
 
             sample_rate = 16000
 
-            self._emit_progress({
-                "status": "loading_audio",
-                "message": f"Loading audio file: {input_path.name}",
-                "progress": 0
-            })
+            self._emit_progress(
+                {"status": "loading_audio", "message": f"Loading audio file: {input_path.name}", "progress": 0}
+            )
 
             logger.info(f"Loading audio file: {input_audio_path}")
             waveform, sr = librosa.load(str(input_path), sr=sample_rate, mono=True)
@@ -183,13 +163,15 @@ class TranscriptionEngine:
             all_transcriptions = []
             num_chunks = int(np.ceil(len(waveform) / chunk_len))
 
-            self._emit_progress({
-                "status": "processing",
-                "message": f"Processing audio in {num_chunks} chunks",
-                "progress": 0,
-                "total_chunks": num_chunks,
-                "current_chunk": 0
-            })
+            self._emit_progress(
+                {
+                    "status": "processing",
+                    "message": f"Processing audio in {num_chunks} chunks",
+                    "progress": 0,
+                    "total_chunks": num_chunks,
+                    "current_chunk": 0,
+                }
+            )
 
             logger.info(f"Processing audio in {num_chunks} chunks...")
 
@@ -206,20 +188,22 @@ class TranscriptionEngine:
                     chunk_num = i + 1
                     progress_pct = int((chunk_num / num_chunks) * 100)
 
-                    self._emit_progress({
-                        "status": "processing",
-                        "message": f"Transcribing chunk {chunk_num}/{num_chunks}",
-                        "progress": progress_pct,
-                        "total_chunks": num_chunks,
-                        "current_chunk": chunk_num
-                    })
+                    self._emit_progress(
+                        {
+                            "status": "processing",
+                            "message": f"Transcribing chunk {chunk_num}/{num_chunks}",
+                            "progress": progress_pct,
+                            "total_chunks": num_chunks,
+                            "current_chunk": chunk_num,
+                        }
+                    )
 
                     logger.info(f"Transcribing chunk {chunk_num}/{num_chunks}")
 
                     chunk_transcription = self._transcribe_chunk(temp_chunk_path, language)
                     all_transcriptions.append(chunk_transcription)
 
-                    logger.info(f"Chunk {chunk_num} completed: \"{chunk_transcription[:50]}...\"")
+                    logger.info(f'Chunk {chunk_num} completed: "{chunk_transcription[:50]}..."')
 
                 finally:
                     # Clean up temporary file
@@ -231,11 +215,7 @@ class TranscriptionEngine:
                         torch.mps.empty_cache()
 
             # Combine all transcriptions
-            self._emit_progress({
-                "status": "finalizing",
-                "message": "Combining transcriptions...",
-                "progress": 95
-            })
+            self._emit_progress({"status": "finalizing", "message": "Combining transcriptions...", "progress": 95})
 
             logger.info("Combining transcriptions...")
             final_transcription = " ".join(all_transcriptions).strip()
@@ -244,13 +224,15 @@ class TranscriptionEngine:
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(final_transcription)
 
-            self._emit_progress({
-                "status": "complete",
-                "message": "Transcription complete",
-                "progress": 100,
-                "transcript": final_transcription,
-                "output_path": str(output_path)
-            })
+            self._emit_progress(
+                {
+                    "status": "complete",
+                    "message": "Transcription complete",
+                    "progress": 100,
+                    "transcript": final_transcription,
+                    "output_path": str(output_path),
+                }
+            )
 
             logger.info(f"Transcription saved to: {output_path}")
 
@@ -263,24 +245,16 @@ class TranscriptionEngine:
                 "chunks_processed": num_chunks,
                 "language": language,
                 "word_count": len(final_transcription.split()),
-                "char_count": len(final_transcription)
+                "char_count": len(final_transcription),
             }
 
         except Exception as e:
             error_msg = f"Error transcribing {input_audio_path}: {str(e)}"
             logger.error(error_msg)
 
-            self._emit_progress({
-                "status": "error",
-                "message": error_msg,
-                "error": str(e)
-            })
+            self._emit_progress({"status": "error", "message": error_msg, "error": str(e)})
 
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": error_msg
-            }
+            return {"status": "error", "error": str(e), "message": error_msg}
 
     def get_device_info(self) -> Dict:
         """Get information about the current device."""
@@ -290,16 +264,13 @@ class TranscriptionEngine:
             "dtype": str(self.dtype),
             "mps_available": torch.backends.mps.is_available(),
             "cuda_available": torch.cuda.is_available(),
-            "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+            "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         }
 
 
 # Standalone function for backward compatibility with original script
 def transcribe_audio_file(
-    input_path: str,
-    output_path: str,
-    language: str = "en",
-    progress_callback: Optional[Callable[[Dict], None]] = None
+    input_path: str, output_path: str, language: str = "en", progress_callback: Optional[Callable[[Dict], None]] = None
 ) -> Dict:
     """
     Convenience function to transcribe an audio file.

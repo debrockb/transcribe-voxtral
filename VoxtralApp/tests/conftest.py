@@ -1,53 +1,52 @@
 """
 Pytest configuration and shared fixtures for Voxtral tests
 """
-import pytest
-import tempfile
+
+import os
 import shutil
+import sys
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-import sys
-import os
+
+import pytest
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Mock heavy dependencies BEFORE any imports
 # This is critical for CI/CD environments without GPU/torch
-os.environ['TESTING'] = '1'
+os.environ["TESTING"] = "1"
 
 # Mock torch and transformers at module level BEFORE importing app
-import sys
-from unittest.mock import MagicMock
+import sys  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
 
 # Create mock modules
-sys.modules['torch'] = MagicMock()
-sys.modules['torch.cuda'] = MagicMock()
-sys.modules['torch.backends'] = MagicMock()
-sys.modules['torch.backends.mps'] = MagicMock()
-sys.modules['transformers'] = MagicMock()
-sys.modules['transformers.models'] = MagicMock()
-sys.modules['transformers.models.whisper'] = MagicMock()
-sys.modules['librosa'] = MagicMock()
-sys.modules['soundfile'] = MagicMock()
-sys.modules['accelerate'] = MagicMock()
+sys.modules["torch"] = MagicMock()
+sys.modules["torch.cuda"] = MagicMock()
+sys.modules["torch.backends"] = MagicMock()
+sys.modules["torch.backends.mps"] = MagicMock()
+sys.modules["transformers"] = MagicMock()
+sys.modules["transformers.models"] = MagicMock()
+sys.modules["transformers.models.whisper"] = MagicMock()
+sys.modules["librosa"] = MagicMock()
+sys.modules["soundfile"] = MagicMock()
+sys.modules["accelerate"] = MagicMock()
 
 # Configure torch mocks
-sys.modules['torch'].cuda.is_available = MagicMock(return_value=False)
-sys.modules['torch'].backends.mps.is_available = MagicMock(return_value=False)
+sys.modules["torch"].cuda.is_available = MagicMock(return_value=False)
+sys.modules["torch"].backends.mps.is_available = MagicMock(return_value=False)
 
 # Now safe to import app
-from app import app as flask_app, socketio
+from app import app as flask_app  # noqa: E402
+from app import socketio  # noqa: E402
 
 
 @pytest.fixture
 def app():
     """Create and configure a test Flask application instance."""
-    flask_app.config.update({
-        "TESTING": True,
-        "WTF_CSRF_ENABLED": False,
-        "SERVER_NAME": "localhost:8000"
-    })
+    flask_app.config.update({"TESTING": True, "WTF_CSRF_ENABLED": False, "SERVER_NAME": "localhost:8000"})
 
     yield flask_app
 
@@ -79,8 +78,8 @@ def sample_audio_file(temp_dir):
     """Create a sample audio file for testing."""
     audio_path = temp_dir / "test_audio.mp3"
     # Create a minimal MP3 file (just for testing file operations, not actual audio)
-    with open(audio_path, 'wb') as f:
-        f.write(b'\xff\xfb\x90\x00' * 100)  # Minimal MP3 header pattern
+    with open(audio_path, "wb") as f:
+        f.write(b"\xff\xfb\x90\x00" * 100)  # Minimal MP3 header pattern
     return audio_path
 
 
@@ -95,7 +94,7 @@ def sample_text_file(temp_dir):
 @pytest.fixture
 def mock_transcription_engine():
     """Mock the TranscriptionEngine for testing without loading the actual model."""
-    with patch('transcription_engine.TranscriptionEngine') as mock:
+    with patch("transcription_engine.TranscriptionEngine") as mock:
         instance = MagicMock()
         instance.transcribe_file.return_value = None
         instance.device = "cpu"
@@ -110,30 +109,28 @@ def mock_heavy_dependencies():
     This fixture runs for ALL tests unless explicitly disabled.
     """
     # Mock torch and related libraries
-    with patch('torch.cuda.is_available', return_value=False), \
-         patch('torch.backends.mps.is_available', return_value=False), \
-         patch('torch.load', return_value={}), \
-         patch('transformers.AutoModelForSpeechSeq2Seq.from_pretrained') as mock_model, \
-         patch('transformers.AutoProcessor.from_pretrained') as mock_processor, \
-         patch('transformers.pipeline') as mock_pipeline:
+    with (
+        patch("torch.cuda.is_available", return_value=False),
+        patch("torch.backends.mps.is_available", return_value=False),
+        patch("torch.load", return_value={}),
+        patch("transformers.AutoModelForSpeechSeq2Seq.from_pretrained") as mock_model,
+        patch("transformers.AutoProcessor.from_pretrained") as mock_processor,
+        patch("transformers.pipeline") as mock_pipeline,
+    ):
 
         # Configure mocks
         mock_model.return_value = MagicMock()
         mock_processor.return_value = MagicMock()
         mock_pipeline.return_value = MagicMock(return_value={"text": "Mocked transcription"})
 
-        yield {
-            'model': mock_model,
-            'processor': mock_processor,
-            'pipeline': mock_pipeline
-        }
+        yield {"model": mock_model, "processor": mock_processor, "pipeline": mock_pipeline}
 
 
 @pytest.fixture(autouse=True)
 def clean_test_folders(app):
     """Automatically clean test upload/output folders before each test."""
-    upload_folder = Path(app.config.get('UPLOAD_FOLDER', 'uploads'))
-    output_folder = Path(app.config.get('OUTPUT_FOLDER', 'transcriptions_voxtral_final'))
+    upload_folder = Path(app.config.get("UPLOAD_FOLDER", "uploads"))
+    output_folder = Path(app.config.get("OUTPUT_FOLDER", "transcriptions_voxtral_final"))
 
     # Create folders if they don't exist
     upload_folder.mkdir(exist_ok=True)

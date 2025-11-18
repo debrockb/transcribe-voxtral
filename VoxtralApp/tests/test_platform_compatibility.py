@@ -2,19 +2,20 @@
 Platform compatibility tests for Windows, macOS, and Linux
 Tests cross-platform file handling, path operations, and script execution
 """
-import pytest
-import sys
+
 import os
 import platform
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 import subprocess
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # Platform detection helpers
-IS_WINDOWS = sys.platform == 'win32'
-IS_MACOS = sys.platform == 'darwin'
-IS_LINUX = sys.platform.startswith('linux')
+IS_WINDOWS = sys.platform == "win32"
+IS_MACOS = sys.platform == "darwin"
+IS_LINUX = sys.platform.startswith("linux")
 PLATFORM_NAME = platform.system()
 
 
@@ -38,7 +39,7 @@ class TestPathHandling:
         """Test that upload folder paths work on all platforms"""
         from pathlib import Path
 
-        upload_folder = Path(app.config.get('UPLOAD_FOLDER', 'uploads'))
+        upload_folder = Path(app.config.get("UPLOAD_FOLDER", "uploads"))
         upload_folder.mkdir(exist_ok=True)
 
         assert upload_folder.exists()
@@ -56,7 +57,7 @@ class TestPathHandling:
         """Test that output folder paths work on all platforms"""
         from pathlib import Path
 
-        output_folder = Path(app.config.get('OUTPUT_FOLDER', 'transcriptions_voxtral_final'))
+        output_folder = Path(app.config.get("OUTPUT_FOLDER", "transcriptions_voxtral_final"))
         output_folder.mkdir(exist_ok=True)
 
         assert output_folder.exists()
@@ -102,7 +103,7 @@ class TestFileOperations:
         test_file = temp_dir / "binary_test.bin"
 
         # Write binary data
-        binary_data = b'\xff\xfb\x90\x00' * 100
+        binary_data = b"\xff\xfb\x90\x00" * 100
         test_file.write_bytes(binary_data)
 
         # Read binary data
@@ -165,22 +166,18 @@ class TestWindowsSpecific:
         # Get the drive letter from temp_dir
         drive = Path(temp_dir).drive
         if drive:  # Should have a drive letter on Windows
-            assert drive.endswith(':')
+            assert drive.endswith(":")
             assert len(drive) == 2  # e.g., 'C:'
 
     def test_windows_batch_script_exists(self):
         """Test that Windows startup scripts exist"""
-        batch_files = [
-            Path("start_web.bat"),
-            Path("run_tests.bat"),
-            Path("../Start Voxtral Web - Windows.bat")
-        ]
+        batch_files = [Path("start_web.bat"), Path("run_tests.bat"), Path("../Start Voxtral Web - Windows.bat")]
 
         for bat_file in batch_files:
             if bat_file.exists():
-                assert bat_file.suffix == '.bat'
+                assert bat_file.suffix == ".bat"
                 content = bat_file.read_text()
-                assert '@echo off' in content or 'REM' in content
+                assert "@echo off" in content or "REM" in content
 
     def test_windows_line_endings(self, temp_dir):
         """Test Windows CRLF line ending handling"""
@@ -201,17 +198,13 @@ class TestMacOSSpecific:
 
     def test_macos_shell_script_exists(self):
         """Test that macOS shell scripts exist and are executable"""
-        shell_files = [
-            Path("start_web.sh"),
-            Path("run_tests.sh"),
-            Path("../Start Voxtral Web - Mac.command")
-        ]
+        shell_files = [Path("start_web.sh"), Path("run_tests.sh"), Path("../Start Voxtral Web - Mac.command")]
 
         for sh_file in shell_files:
             if sh_file.exists():
-                assert sh_file.suffix in ['.sh', '.command']
+                assert sh_file.suffix in [".sh", ".command"]
                 content = sh_file.read_text()
-                assert '#!/bin/bash' in content or '#!/bin/sh' in content
+                assert "#!/bin/bash" in content or "#!/bin/sh" in content
 
                 # Check if file is executable
                 assert os.access(sh_file, os.X_OK), f"{sh_file} should be executable"
@@ -224,14 +217,14 @@ class TestMacOSSpecific:
 
         # Verify it exists but should be in .gitignore
         assert ds_store.exists()
-        assert ds_store.name.startswith('.')
+        assert ds_store.name.startswith(".")
 
     def test_macos_app_bundle_structure(self):
         """Test macOS-specific application structure"""
         # Verify no .app bundle confusion with Python scripts
         app_py = Path("app.py")
         assert app_py.exists()
-        assert app_py.suffix == '.py'
+        assert app_py.suffix == ".py"
         assert not app_py.is_dir()
 
 
@@ -242,16 +235,13 @@ class TestLinuxSpecific:
 
     def test_linux_shell_script_exists(self):
         """Test that Linux shell scripts exist and are executable"""
-        shell_files = [
-            Path("start_web.sh"),
-            Path("run_tests.sh")
-        ]
+        shell_files = [Path("start_web.sh"), Path("run_tests.sh")]
 
         for sh_file in shell_files:
             if sh_file.exists():
-                assert sh_file.suffix == '.sh'
+                assert sh_file.suffix == ".sh"
                 content = sh_file.read_text()
-                assert '#!/bin/bash' in content or '#!/bin/sh' in content
+                assert "#!/bin/bash" in content or "#!/bin/sh" in content
 
                 # Check if file is executable
                 assert os.access(sh_file, os.X_OK), f"{sh_file} should be executable"
@@ -279,14 +269,14 @@ class TestPlatformDetection:
     def test_platform_detection(self):
         """Test that we can correctly detect the platform"""
         detected_platform = platform.system()
-        assert detected_platform in ['Windows', 'Darwin', 'Linux']
+        assert detected_platform in ["Windows", "Darwin", "Linux"]
 
         if IS_WINDOWS:
-            assert detected_platform == 'Windows'
+            assert detected_platform == "Windows"
         elif IS_MACOS:
-            assert detected_platform == 'Darwin'
+            assert detected_platform == "Darwin"
         elif IS_LINUX:
-            assert detected_platform == 'Linux'
+            assert detected_platform == "Linux"
 
     def test_python_version_compatibility(self):
         """Test that Python version is compatible"""
@@ -296,26 +286,25 @@ class TestPlatformDetection:
         assert version.minor >= 9
 
     @pytest.mark.requires_model
-    @patch('transcription_engine.torch')
+    @patch("transcription_engine.torch")
     def test_device_detection_per_platform(self, mock_torch):
         """Test that device detection works correctly on each platform"""
         from transcription_engine import TranscriptionEngine
 
         # Mock different scenarios
         scenarios = [
-            {'cuda': False, 'mps': False, 'expected': 'cpu'},  # Basic CPU
-            {'cuda': True, 'mps': False, 'expected': 'cuda:0'},  # NVIDIA GPU
-            {'cuda': False, 'mps': True, 'expected': 'mps'},  # Apple Silicon
+            {"cuda": False, "mps": False, "expected": "cpu"},  # Basic CPU
+            {"cuda": True, "mps": False, "expected": "cuda:0"},  # NVIDIA GPU
+            {"cuda": False, "mps": True, "expected": "mps"},  # Apple Silicon
         ]
 
         for scenario in scenarios:
-            mock_torch.cuda.is_available.return_value = scenario['cuda']
-            mock_torch.backends.mps.is_available.return_value = scenario['mps']
+            mock_torch.cuda.is_available.return_value = scenario["cuda"]
+            mock_torch.backends.mps.is_available.return_value = scenario["mps"]
 
-            with patch('transcription_engine.AutoModelForSpeechSeq2Seq'), \
-                 patch('transcription_engine.AutoProcessor'):
+            with patch("transcription_engine.AutoModelForSpeechSeq2Seq"), patch("transcription_engine.AutoProcessor"):
                 engine = TranscriptionEngine(model_id="test-model")
-                assert engine.device == scenario['expected']
+                assert engine.device == scenario["expected"]
 
 
 @pytest.mark.cross_platform
@@ -328,27 +317,27 @@ class TestEnvironmentVariables:
         default_port = 8000
 
         # Port should be configurable via environment
-        with patch.dict(os.environ, {'PORT': '9000'}):
-            port = int(os.environ.get('PORT', default_port))
+        with patch.dict(os.environ, {"PORT": "9000"}):
+            port = int(os.environ.get("PORT", default_port))
             assert port == 9000
 
         # Test with default
-        port = int(os.environ.get('PORT', default_port))
+        port = int(os.environ.get("PORT", default_port))
         assert port == default_port
 
     def test_pythonpath_handling(self):
         """Test that PYTHONPATH works correctly on all platforms"""
         # Get current PYTHONPATH
-        pythonpath = os.environ.get('PYTHONPATH', '')
+        pythonpath = os.environ.get("PYTHONPATH", "")
 
         # Should be a string (even if empty)
         assert isinstance(pythonpath, str)
 
         # Path separator should be platform-appropriate
-        path_separator = ';' if IS_WINDOWS else ':'
+        path_separator = ";" if IS_WINDOWS else ":"
 
         # If PYTHONPATH has multiple paths, they should use correct separator
-        if pythonpath and (';' in pythonpath or ':' in pythonpath):
+        if pythonpath and (";" in pythonpath or ":" in pythonpath):
             assert path_separator in pythonpath or len(pythonpath.split(path_separator)) >= 1
 
 
@@ -359,45 +348,30 @@ class TestScriptExecution:
     def test_python_shebang_in_scripts(self):
         """Test that shell scripts have proper shebangs"""
         if not IS_WINDOWS:
-            shell_scripts = [
-                Path("start_web.sh"),
-                Path("run_tests.sh")
-            ]
+            shell_scripts = [Path("start_web.sh"), Path("run_tests.sh")]
 
             for script in shell_scripts:
                 if script.exists():
-                    first_line = script.read_text().split('\n')[0]
-                    assert first_line.startswith('#!'), f"{script} missing shebang"
-                    assert 'bash' in first_line or 'sh' in first_line
+                    first_line = script.read_text().split("\n")[0]
+                    assert first_line.startswith("#!"), f"{script} missing shebang"
+                    assert "bash" in first_line or "sh" in first_line
 
     def test_batch_file_format(self):
         """Test that Windows batch files are properly formatted"""
         if IS_WINDOWS:
-            batch_files = [
-                Path("start_web.bat"),
-                Path("run_tests.bat")
-            ]
+            batch_files = [Path("start_web.bat"), Path("run_tests.bat")]
 
             for bat_file in batch_files:
                 if bat_file.exists():
                     content = bat_file.read_text()
                     # Should have Windows batch file markers
-                    assert '@echo off' in content or 'REM' in content or 'echo' in content
+                    assert "@echo off" in content or "REM" in content or "echo" in content
 
     def test_venv_activation_paths(self):
         """Test that virtual environment activation uses correct paths"""
         venv_path = Path("voxtral_env")
 
         if venv_path.exists():
-            if IS_WINDOWS:
-                # Windows uses Scripts folder
-                python_exe = venv_path / "Scripts" / "python.exe"
-                pip_exe = venv_path / "Scripts" / "pip.exe"
-            else:
-                # Unix uses bin folder
-                python_exe = venv_path / "bin" / "python3"
-                pip_exe = venv_path / "bin" / "pip3"
-
             # Note: Paths might be symlinks, so we just check parent exists
             assert venv_path.exists()
 
@@ -408,16 +382,16 @@ class TestCrossPlateformReport:
 
     def test_platform_test_summary(self):
         """Report which platform we're running on"""
-        print(f"\n{'='*60}")
-        print(f"Platform Test Summary")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print("Platform Test Summary")
+        print(f"{'=' * 60}")
         print(f"Operating System: {PLATFORM_NAME}")
         print(f"Platform: {sys.platform}")
         print(f"Python Version: {sys.version}")
         print(f"Is Windows: {IS_WINDOWS}")
         print(f"Is macOS: {IS_MACOS}")
         print(f"Is Linux: {IS_LINUX}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         # This test always passes, it's just for reporting
         assert True

@@ -1,0 +1,37 @@
+{
+  "model": {
+    "version": "quantized",
+    "available_models": {
+      "full": {
+        "id": "mistralai/Voxtral-Mini-3B-2507",
+        "name": "Voxtral Mini 3B (Full)",
+        "size_gb": 9.36,
+        "format": "safetensors",
+        "quantization": null,
+        "description": "Full precision model - Best quality, requires ~20-30GB RAM during loading",
+        "memory_requirements": {
+          "disk": "9.36 GB",
+          "ram_loading": "20-30 GB (Windows: increase pagefile to 50GB)",
+          "ram_inference": "10-12 GB"
+        }
+      },
+      "quantized": {
+        "id": "mistralai/Voxtral-Mini-3B-2507",
+        "name": "Voxtral Mini 3B (4-bit Quantized)",
+        "size_gb": 9.36,
+        "format": "safetensors",
+        "quantization": "4bit",
+        "description": "4-bit quantized model - 75% less memory usage (NVIDIA GPU required, auto-falls back to full precision on Mac/CPU)",
+        "memory_requirements": {
+          "disk": "9.36 GB (quantized during load)",
+          "ram_loading": "5-8 GB (NVIDIA GPU) / 20-30GB (Mac/CPU fallback)",
+          "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)"
+        }
+      }
+    }
+  },
+  "app": {
+    "version": "1.1.0",
+    "name": "Voxtral Transcription"
+  }
+}

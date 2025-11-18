@@ -17,7 +17,7 @@ import numpy as np
 import psutil
 import soundfile as sf
 import torch
-from transformers import AutoProcessor, VoxtralForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, VoxtralForConditionalGeneration
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -38,6 +38,7 @@ class TranscriptionEngine:
         model_id: str = "mistralai/Voxtral-Mini-3B-2507",
         device: Optional[str] = None,
         progress_callback: Optional[Callable[[Dict], None]] = None,
+        quantization: Optional[str] = None,
     ):
         """
         Initialize the transcription engine.
@@ -46,13 +47,17 @@ class TranscriptionEngine:
             model_id: HuggingFace model identifier
             device: Device to use (mps/cuda/cpu). Auto-detects if None.
             progress_callback: Function to call with progress updates
+            quantization: Quantization mode ('4bit', '8bit', or None for full precision)
         """
         self.model_id = model_id
         self.progress_callback = progress_callback
+        self.quantization = quantization
         self.device = device or self._detect_device()
         self.dtype = torch.bfloat16 if self.device in ["cuda", "mps"] else torch.float32
 
         logger.info(f"Initializing TranscriptionEngine on device: {self.device}")
+        if quantization:
+            logger.info(f"Using {quantization} quantization")
 
         # Load model and processor
         self.processor = None
@@ -73,40 +78,52 @@ class TranscriptionEngine:
         try:
             self._emit_progress({"status": "loading_model", "message": f"Loading model '{self.model_id}'...", "progress": 0})
 
-            # Check if this is a GGUF model
-            is_gguf = "GGUF" in self.model_id or "gguf" in self.model_id.lower()
+            logger.info(f"Loading model: {self.model_id}")
+            self.processor = AutoProcessor.from_pretrained(self.model_id)
 
-            if is_gguf:
-                logger.info(f"Detected GGUF model format: {self.model_id}")
-                # For GGUF models, we need to specify the filename
-                # Try to get the GGUF filename from config if available
-                from config_manager import config
-                model_config = config.get_model_config()
-                gguf_filename = model_config.get("filename")
+            # Prepare model loading arguments
+            model_kwargs = {
+                "torch_dtype": self.dtype,
+            }
 
-                if gguf_filename:
-                    logger.info(f"Loading GGUF file: {gguf_filename}")
-                    self.processor = AutoProcessor.from_pretrained(self.model_id, gguf_file=gguf_filename)
-                    self.model = VoxtralForConditionalGeneration.from_pretrained(
-                        self.model_id,
-                        torch_dtype=self.dtype,
-                        device_map=self.device,
-                        gguf_file=gguf_filename
-                    )
-                else:
-                    # Fallback: try loading without explicit filename
-                    logger.warning("GGUF filename not specified in config, attempting auto-detection")
-                    self.processor = AutoProcessor.from_pretrained(self.model_id)
-                    self.model = VoxtralForConditionalGeneration.from_pretrained(
-                        self.model_id, torch_dtype=self.dtype, device_map=self.device
-                    )
-            else:
-                # Standard safetensors loading
-                logger.info(f"Loading safetensors model: {self.model_id}")
-                self.processor = AutoProcessor.from_pretrained(self.model_id)
-                self.model = VoxtralForConditionalGeneration.from_pretrained(
-                    self.model_id, torch_dtype=self.dtype, device_map=self.device
+            # Add quantization config if requested
+            # Note: bitsandbytes quantization only works with CUDA
+            if self.quantization and self.device != "cuda":
+                logger.warning(
+                    f"Quantization requested but not supported on {self.device.upper()}. "
+                    f"bitsandbytes quantization requires CUDA (NVIDIA GPU). "
+                    f"Loading full precision model instead."
                 )
+                self._emit_progress({
+                    "status": "warning",
+                    "message": f"Quantization not supported on {self.device.upper()}, using full precision",
+                })
+                self.quantization = None  # Disable quantization
+                model_kwargs["device_map"] = self.device
+            elif self.quantization == "4bit":
+                logger.info("Configuring 4-bit quantization")
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                )
+                model_kwargs["quantization_config"] = quantization_config
+                model_kwargs["device_map"] = "auto"  # Required for quantization
+            elif self.quantization == "8bit":
+                logger.info("Configuring 8-bit quantization")
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                )
+                model_kwargs["quantization_config"] = quantization_config
+                model_kwargs["device_map"] = "auto"  # Required for quantization
+            else:
+                # No quantization - use specified device
+                model_kwargs["device_map"] = self.device
+
+            self.model = VoxtralForConditionalGeneration.from_pretrained(
+                self.model_id, **model_kwargs
+            )
 
             self._emit_progress(
                 {
@@ -114,6 +131,7 @@ class TranscriptionEngine:
                     "message": "Model loaded successfully",
                     "progress": 0,
                     "device": self.device.upper(),
+                    "quantization": self.quantization or "none",
                 }
             )
 

@@ -8,6 +8,7 @@ soundfile
 accelerate
 mistral-common
 transformers
+bitsandbytes  # For model quantization
 
 # Web application dependencies
 Flask==3.0.0

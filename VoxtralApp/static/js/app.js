@@ -48,16 +48,31 @@ const elements = {
     updateBannerMessage: document.getElementById('updateBannerMessage'),
     viewReleaseBtn: document.getElementById('viewReleaseBtn'),
     closeUpdateBanner: document.getElementById('closeUpdateBanner'),
-    checkUpdateBtn: document.getElementById('checkUpdateBtn')
+    checkUpdateBtn: document.getElementById('checkUpdateBtn'),
+    // Model selection
+    modelModal: document.getElementById('modelModal'),
+    modelGrid: document.getElementById('modelGrid'),
+    initializeModelBtn: document.getElementById('initializeModelBtn'),
+    modelLoadingOverlay: document.getElementById('modelLoadingOverlay'),
+    modelLoadingTitle: document.getElementById('modelLoadingTitle'),
+    modelLoadingMessage: document.getElementById('modelLoadingMessage')
 };
 
 // Initialize application
-function init() {
+async function init() {
     setupEventListeners();
-    loadLanguages();
     connectWebSocket();
-    startMemoryMonitoring();
-    checkForUpdates();
+
+    // Check if model is loaded, show modal if not
+    const modelStatus = await checkModelStatus();
+    if (!modelStatus.loaded) {
+        await showModelSelectionModal();
+    } else {
+        state.modelLoaded = true;
+        loadLanguages();
+        startMemoryMonitoring();
+        checkForUpdates();
+    }
 }
 
 // Setup all event listeners
@@ -131,10 +146,183 @@ function connectWebSocket() {
     state.socket.on('transcription_complete', handleTranscriptionComplete);
     state.socket.on('transcription_error', handleTranscriptionError);
     state.socket.on('memory_warning', handleMemoryWarning);
+    state.socket.on('model_loading', handleModelLoading);
 
     state.socket.on('disconnect', () => {
         console.log('WebSocket disconnected');
     });
+}
+
+// Model Selection Functions
+
+/**
+ * Check if model is loaded
+ */
+async function checkModelStatus() {
+    try {
+        const response = await fetch('/api/model/status');
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Failed to check model status:', error);
+        return { loaded: false, loading: false };
+    }
+}
+
+/**
+ * Load available models from API
+ */
+async function loadAvailableModels() {
+    try {
+        const response = await fetch('/api/models');
+        const data = await response.json();
+        state.availableModels = data.models;
+        return data.models;
+    } catch (error) {
+        console.error('Failed to load available models:', error);
+        showToast('Failed to load models', 'error');
+        return [];
+    }
+}
+
+/**
+ * Show model selection modal
+ */
+async function showModelSelectionModal() {
+    // Load available models
+    const models = await loadAvailableModels();
+
+    if (models.length === 0) {
+        showToast('No models available', 'error');
+        return;
+    }
+
+    // Default to 'full' model
+    state.selectedModel = models.find(m => m.id === 'full') || models[0];
+
+    // Render model cards
+    elements.modelGrid.innerHTML = models.map((model, index) => {
+        const isDefault = model.id === 'full';
+        const isSelected = state.selectedModel.id === model.id;
+
+        return `
+            <div class="model-card ${isSelected ? 'selected' : ''}" data-model-id="${model.id}">
+                ${isDefault ? '<div class="model-card-badge">Default</div>' : ''}
+                <h3 class="model-card-title">${model.name}</h3>
+                <div class="model-card-size">${model.size_gb} GB</div>
+                <p class="model-card-description">${model.description}</p>
+                <div class="model-card-specs">
+                    <h4>Memory Requirements:</h4>
+                    <ul>
+                        <li><strong>Disk:</strong> <span>${model.memory_requirements.disk}</span></li>
+                        <li><strong>RAM (Loading):</strong> <span>${model.memory_requirements.ram_loading}</span></li>
+                        <li><strong>RAM (Running):</strong> <span>${model.memory_requirements.ram_inference}</span></li>
+                    </ul>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add click handlers to model cards
+    document.querySelectorAll('.model-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const modelId = card.dataset.modelId;
+            state.selectedModel = models.find(m => m.id === modelId);
+
+            // Update selection UI
+            document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+
+            // Enable initialize button
+            elements.initializeModelBtn.disabled = false;
+        });
+    });
+
+    // Enable initialize button (default model is pre-selected)
+    elements.initializeModelBtn.disabled = false;
+
+    // Add initialize button handler
+    elements.initializeModelBtn.onclick = initializeSelectedModel;
+
+    // Show modal
+    elements.modelModal.style.display = 'flex';
+}
+
+/**
+ * Initialize the selected model
+ */
+async function initializeSelectedModel() {
+    if (!state.selectedModel) {
+        showToast('Please select a model', 'error');
+        return;
+    }
+
+    try {
+        // Disable button and show loading overlay
+        elements.initializeModelBtn.disabled = true;
+        elements.modelLoadingOverlay.style.display = 'flex';
+        elements.modelLoadingTitle.textContent = `Loading ${state.selectedModel.name}...`;
+        elements.modelLoadingMessage.textContent = 'This may take a few minutes. Please wait...';
+
+        // Send initialization request
+        const response = await fetch('/api/model/initialize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                version: state.selectedModel.id
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            console.log('Model initialization started:', data);
+            // WebSocket will handle progress updates via handleModelLoading
+        } else {
+            throw new Error(data.message || 'Failed to initialize model');
+        }
+    } catch (error) {
+        console.error('Failed to initialize model:', error);
+        showToast(`Failed to initialize model: ${error.message}`, 'error');
+
+        // Re-enable button and hide overlay
+        elements.initializeModelBtn.disabled = false;
+        elements.modelLoadingOverlay.style.display = 'none';
+    }
+}
+
+/**
+ * Handle model loading progress from WebSocket
+ */
+function handleModelLoading(data) {
+    console.log('Model loading update:', data);
+
+    if (data.status === 'loading') {
+        elements.modelLoadingTitle.textContent = data.message || 'Loading model...';
+    } else if (data.status === 'loaded') {
+        // Model loaded successfully
+        state.modelLoaded = true;
+
+        // Hide modal
+        elements.modelModal.style.display = 'none';
+        elements.modelLoadingOverlay.style.display = 'none';
+
+        showToast(`${data.model} loaded successfully!`, 'success');
+
+        // Initialize the rest of the app
+        loadLanguages();
+        startMemoryMonitoring();
+        checkForUpdates();
+    } else if (data.status === 'error') {
+        // Error loading model
+        showToast(`Error loading model: ${data.message}`, 'error');
+
+        // Re-enable button and hide overlay
+        elements.initializeModelBtn.disabled = false;
+        elements.modelLoadingOverlay.style.display = 'none';
+    }
 }
 
 // Memory Monitoring Functions

@@ -820,7 +820,7 @@ def initialize_engine(model_version=None):
     Initialize the transcription engine with specified model.
 
     Args:
-        model_version: Model version to load ('full' or 'gguf'). Uses config default if None.
+        model_version: Model version to load ('full' or 'quantized'). Uses config default if None.
     """
     global transcription_engine, engine_loading
 
@@ -846,13 +846,16 @@ def initialize_engine(model_version=None):
 
         model_id = model_config.get("id")
         model_name = model_config.get("name", "Unknown")
+        quantization = model_config.get("quantization")
 
         logger.info(f"Initializing transcription engine with model: {model_name} ({model_id})")
+        if quantization:
+            logger.info(f"Using {quantization} quantization")
 
         # Emit loading progress via WebSocket
         socketio.emit("model_loading", {"status": "loading", "model": model_name, "message": f"Loading {model_name}..."})
 
-        transcription_engine = TranscriptionEngine(model_id=model_id)
+        transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
 
         # Save the selected model version to config
         if model_version:
@@ -877,7 +880,7 @@ if __name__ == "__main__":
     # Model will be loaded after user selection in the web UI
 
     # Start memory monitoring
-    start_memory_monitoring()
+    start_memory_monitor()
 
     # Start Flask-SocketIO server
     # Using port 8000 as port 5000 is often used by macOS AirPlay Receiver

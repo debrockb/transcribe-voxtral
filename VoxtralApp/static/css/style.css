@@ -656,6 +656,236 @@ body {
     text-decoration: none;
 }
 
+/* Model Selection Modal */
+.model-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.model-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(26, 24, 68, 0.6);
+    backdrop-filter: blur(8px);
+}
+
+.model-modal-content {
+    position: relative;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    max-width: 800px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 40px;
+}
+
+.model-modal-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.model-modal-header h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.model-modal-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+}
+
+.model-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.model-card {
+    background: var(--surface-soft);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.model-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(242, 162, 70, 0.15);
+}
+
+.model-card.selected {
+    border-color: var(--accent);
+    background: var(--accent-muted);
+    box-shadow: 0 8px 20px rgba(242, 162, 70, 0.2);
+}
+
+.model-card-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: var(--accent);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.model-card-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.model-card-size {
+    color: var(--accent-dark);
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+}
+
+.model-card-description {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.model-card-specs {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 0.9rem;
+}
+
+.model-card-specs h4 {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.model-card-specs ul {
+    list-style: none;
+    padding: 0;
+}
+
+.model-card-specs li {
+    color: var(--text-secondary);
+    padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.model-card-specs strong {
+    color: var(--text-primary);
+}
+
+.model-modal-footer {
+    display: flex;
+    justify-content: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.btn-large {
+    padding: 16px 48px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Model Loading Overlay */
+.model-loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-lg);
+    z-index: 10;
+}
+
+.model-loading-content {
+    text-align: center;
+    max-width: 400px;
+    padding: 32px;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 24px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.model-loading-content h3 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.model-loading-content p {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+.model-loading-tips {
+    background: var(--surface-soft);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: left;
+}
+
+.model-loading-tips p {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.model-loading-tips ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.model-loading-tips li {
+    color: var(--text-secondary);
+    padding: 4px 0;
+    font-size: 0.95rem;
+}
+
+.model-loading-tips li:before {
+    content: "→ ";
+    color: var(--accent);
+    font-weight: bold;
+    margin-right: 8px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .hero {

@@ -58,6 +58,13 @@ voxtral_transcriptions_chunked/
 # Temporary files
 *.tmp
 .cache/
+*.bak
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
 
 # Web application uploads
 uploads/

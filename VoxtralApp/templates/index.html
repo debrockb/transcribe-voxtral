@@ -4,166 +4,268 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voxtral Transcription - AI-Powered Audio Transcription</title>
+    <meta name="theme-color" content="#f8efe0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/voxtral-icon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <h1 class="app-title">
-                    <span class="icon">🎙️</span>
-                    Voxtral Transcription
-                </h1>
-                <div class="device-badge" id="deviceBadge">
-                    <span id="deviceName">{{ device_info.device_name or 'CPU' }}</span>
+    <div class="page-shell">
+        <header class="hero">
+            <div class="hero-grid">
+                <div class="hero-copy">
+                    <div class="brand-lockup">
+                        <span class="logo-chip">
+                            <img src="{{ url_for('static', filename='img/voxtral-icon.svg') }}" alt="Voxtral icon">
+                        </span>
+                        <div>
+                            <p class="hero-eyebrow">Local-first transcription studio</p>
+                            <h1 class="hero-title">Bright, effortless transcripts powered by Voxtral</h1>
+                        </div>
+                    </div>
+                    <p class="hero-lede">
+                        Inspired by the clarity of simplybastiaan.com with a lighter twist.
+                        Voxtral keeps your words on-device while polishing every syllable
+                        with amber warmth and crisp contrast.
+                    </p>
+                    <div class="hero-pills">
+                        <span class="pill">Multi-format audio &amp; video</span>
+                        <span class="pill">Mistral AI Voxtral-Mini-3B</span>
+                        <span class="pill">Privacy locked to your machine</span>
+                    </div>
+                    <div class="hero-footer">
+                        <div class="device-badge" id="deviceBadge">
+                            <span class="badge-label">Optimized for</span>
+                            <strong id="deviceName">{{ device_info.device_name or 'CPU' }}</strong>
+                        </div>
+                        <div class="trust-note">
+                            <span>✨</span>
+                            <p>Zero-hop uploads. Everything runs locally.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-panel">
+                    <div class="hero-wave">
+                        <div class="hero-wave-ring ring-one"></div>
+                        <div class="hero-wave-ring ring-two"></div>
+                        <div class="hero-wave-ring ring-three"></div>
+                        <div class="hero-node"></div>
+                    </div>
+                    <div class="hero-panel-card">
+                        <p class="panel-label">Live session</p>
+                        <h3>Ready for your next file</h3>
+                        <ul class="panel-list">
+                            <li>Upload up to 500MB</li>
+                            <li>English language available today</li>
+                            <li>Automatic transcript cleanup</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-            <p class="app-subtitle">AI-Powered Audio & Video Transcription</p>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- File Upload Section -->
-            <section class="upload-section">
-                <div class="upload-area" id="uploadArea">
-                    <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.m4a,.mp4,.avi,.mov" hidden>
-                    <div class="upload-icon">📁</div>
-                    <h3>Drag & Drop Audio/Video File</h3>
-                    <p>or click to browse</p>
-                    <p class="file-types">Supported: MP3, M4A, MP4, WAV, FLAC, AVI, MOV</p>
-                    <p class="file-size-limit">Max file size: 500MB</p>
-                </div>
+        <section class="signal-grid">
+            <article class="signal-card">
+                <h4>0 Cloud Hop</h4>
+                <p>Every word is processed locally to keep your confidential content safe.</p>
+            </article>
+            <article class="signal-card">
+                <h4>Amber-guided UI</h4>
+                <p>Soft ivory panels and amber cues direct focus without overwhelming the eye.</p>
+            </article>
+            <article class="signal-card">
+                <h4>Flexible Inputs</h4>
+                <p>Drop in WAV, MP3, FLAC, M4A, MP4, AVI or MOV — Voxtral styles them all.</p>
+            </article>
+        </section>
 
-                <!-- Selected File Info -->
-                <div class="file-info" id="fileInfo" style="display: none;">
-                    <div class="file-details">
-                        <span class="file-icon">📄</span>
-                        <div class="file-text">
-                            <div class="file-name" id="fileName">filename.mp3</div>
-                            <div class="file-meta">
-                                <span id="fileSize">0 MB</span>
-                                <span id="fileType"></span>
+        <main class="workspace">
+            <div class="workspace-grid">
+                <div class="workspace-primary">
+                    <!-- File Upload Section -->
+                    <section class="upload-section">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="eyebrow">Step 1</p>
+                                <h2>Bring your media</h2>
                             </div>
                         </div>
-                        <button class="btn-remove" id="removeFile" title="Remove file">✕</button>
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.m4a,.mp4,.avi,.mov" hidden>
+                            <div class="upload-icon">📁</div>
+                            <h3>Drag &amp; Drop Audio/Video File</h3>
+                            <p>or click to browse</p>
+                            <p class="file-types">Supported: MP3, M4A, MP4, WAV, FLAC, AVI, MOV</p>
+                            <p class="file-size-limit">Max file size: 500MB</p>
+                        </div>
+
+                        <!-- Selected File Info -->
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="file-details">
+                                <span class="file-icon">📄</span>
+                                <div class="file-text">
+                                    <div class="file-name" id="fileName">filename.mp3</div>
+                                    <div class="file-meta">
+                                        <span id="fileSize">0 MB</span>
+                                        <span id="fileType"></span>
+                                    </div>
+                                </div>
+                                <button class="btn-remove" id="removeFile" title="Remove file">✕</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Language & Controls Section -->
+                    <section class="controls-section">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="eyebrow">Step 2</p>
+                                <h2>Choose your settings</h2>
+                            </div>
+                        </div>
+                        <div class="controls-grid">
+                            <div class="control-group">
+                                <label for="languageSelect">Transcription Language</label>
+                                <div class="select-wrapper">
+                                    <select id="languageSelect">
+                                        <option value="en">English</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <button class="btn-primary" id="transcribeBtn" disabled>
+                                Start Transcription
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Progress Section -->
+                    <section class="progress-section" id="progressSection" style="display: none;">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="eyebrow">Step 3</p>
+                                <h2>Progress</h2>
+                            </div>
+                            <span class="pill pill-soft">Live</span>
+                        </div>
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span class="progress-status" id="progressStatus">Ready</span>
+                                <span class="progress-percentage" id="progressPercentage">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                            </div>
+                            <div class="progress-details" id="progressDetails">
+                                Waiting to start...
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Transcript Section -->
+                    <section class="transcript-section" id="transcriptSection" style="display: none;">
+                        <div class="transcript-header">
+                            <div>
+                                <p class="eyebrow">Results</p>
+                                <h3>Transcript</h3>
+                            </div>
+                            <div class="transcript-actions">
+                                <button class="btn-secondary" id="copyBtn" title="Copy to clipboard">
+                                    <span class="btn-icon">📋</span> Copy
+                                </button>
+                                <button class="btn-secondary" id="downloadBtn" title="Download as text file">
+                                    <span class="btn-icon">💾</span> Download
+                                </button>
+                                <button class="btn-secondary" id="clearBtn" title="Clear transcript">
+                                    <span class="btn-icon">🗑️</span> Clear
+                                </button>
+                            </div>
+                        </div>
+                        <div class="transcript-stats" id="transcriptStats">
+                            <span><strong>Words:</strong> <span id="wordCount">0</span></span>
+                            <span><strong>Characters:</strong> <span id="charCount">0</span></span>
+                            <span><strong>Duration:</strong> <span id="audioDuration">0:00</span></span>
+                        </div>
+                        <div class="transcript-content" id="transcriptContent">
+                            <div class="transcript-placeholder">
+                                Your transcription will appear here...
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="workspace-secondary">
+                    <div class="insight-card">
+                        <p class="eyebrow">Session tips</p>
+                        <h3>Make Voxtral shine</h3>
+                        <ul>
+                            <li>Upload clean WAV for the fastest processing.</li>
+                            <li>Keep the app open to watch progress in real time.</li>
+                            <li>Use the history tray to revisit previous runs.</li>
+                        </ul>
                     </div>
-                </div>
-            </section>
 
-            <!-- Language & Controls Section -->
-            <section class="controls-section">
-                <div class="control-group">
-                    <label for="languageSelect">Transcription Language</label>
-                    <div class="select-wrapper">
-                        <select id="languageSelect">
-                            <option value="en">English</option>
-                        </select>
-                    </div>
-                </div>
+                    <!-- History Section -->
+                    <section class="history-section" id="historySection" style="display: none;">
+                        <div class="history-header">
+                            <div>
+                                <p class="eyebrow">Session memory</p>
+                                <h3>📚 History</h3>
+                            </div>
+                            <div class="history-tabs">
+                                <button class="tab-btn active" id="tabTranscriptions">Transcriptions</button>
+                                <button class="tab-btn" id="tabUploads">Uploads</button>
+                            </div>
+                        </div>
 
-                <button class="btn-primary" id="transcribeBtn" disabled>
-                    Start Transcription
-                </button>
-            </section>
+                        <!-- Transcriptions Tab -->
+                        <div class="history-content" id="transcriptionsTab">
+                            <div class="history-actions">
+                                <button class="btn-secondary btn-sm" id="refreshTranscriptions">
+                                    <span class="btn-icon">🔄</span> Refresh
+                                </button>
+                                <button class="btn-secondary btn-sm btn-danger" id="deleteAllTranscriptions">
+                                    <span class="btn-icon">🗑️</span> Delete All
+                                </button>
+                            </div>
+                            <div class="history-list" id="transcriptionsList">
+                                <div class="history-placeholder">No transcriptions yet</div>
+                            </div>
+                        </div>
 
-            <!-- Progress Section -->
-            <section class="progress-section" id="progressSection" style="display: none;">
-                <div class="progress-header">
-                    <span class="progress-status" id="progressStatus">Ready</span>
-                    <span class="progress-percentage" id="progressPercentage">0%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-                </div>
-                <div class="progress-details" id="progressDetails">
-                    Waiting to start...
-                </div>
-            </section>
+                        <!-- Uploads Tab -->
+                        <div class="history-content" id="uploadsTab" style="display: none;">
+                            <div class="history-actions">
+                                <button class="btn-secondary btn-sm" id="refreshUploads">
+                                    <span class="btn-icon">🔄</span> Refresh
+                                </button>
+                                <button class="btn-secondary btn-sm btn-danger" id="deleteAllUploads">
+                                    <span class="btn-icon">🗑️</span> Delete All
+                                </button>
+                            </div>
+                            <div class="history-list" id="uploadsList">
+                                <div class="history-placeholder">No uploads yet</div>
+                            </div>
+                        </div>
+                    </section>
 
-            <!-- Transcript Section -->
-            <section class="transcript-section" id="transcriptSection" style="display: none;">
-                <div class="transcript-header">
-                    <h3>Transcript</h3>
-                    <div class="transcript-actions">
-                        <button class="btn-secondary" id="copyBtn" title="Copy to clipboard">
-                            <span class="btn-icon">📋</span> Copy
+                    <!-- Toggle History Button -->
+                    <div class="toggle-history-btn">
+                        <button class="btn-secondary" id="toggleHistory">
+                            <span class="btn-icon">📚</span> View History
                         </button>
-                        <button class="btn-secondary" id="downloadBtn" title="Download as text file">
-                            <span class="btn-icon">💾</span> Download
-                        </button>
-                        <button class="btn-secondary" id="clearBtn" title="Clear transcript">
-                            <span class="btn-icon">🗑️</span> Clear
-                        </button>
                     </div>
-                </div>
-                <div class="transcript-stats" id="transcriptStats">
-                    <span><strong>Words:</strong> <span id="wordCount">0</span></span>
-                    <span><strong>Characters:</strong> <span id="charCount">0</span></span>
-                    <span><strong>Duration:</strong> <span id="audioDuration">0:00</span></span>
-                </div>
-                <div class="transcript-content" id="transcriptContent">
-                    <div class="transcript-placeholder">
-                        Your transcription will appear here...
-                    </div>
-                </div>
-            </section>
-
-            <!-- History Section -->
-            <section class="history-section" id="historySection" style="display: none;">
-                <div class="history-header">
-                    <h3>📚 History</h3>
-                    <div class="history-tabs">
-                        <button class="tab-btn active" id="tabTranscriptions">Transcriptions</button>
-                        <button class="tab-btn" id="tabUploads">Uploads</button>
-                    </div>
-                </div>
-
-                <!-- Transcriptions Tab -->
-                <div class="history-content" id="transcriptionsTab">
-                    <div class="history-actions">
-                        <button class="btn-secondary btn-sm" id="refreshTranscriptions">
-                            <span class="btn-icon">🔄</span> Refresh
-                        </button>
-                        <button class="btn-secondary btn-sm btn-danger" id="deleteAllTranscriptions">
-                            <span class="btn-icon">🗑️</span> Delete All
-                        </button>
-                    </div>
-                    <div class="history-list" id="transcriptionsList">
-                        <div class="history-placeholder">No transcriptions yet</div>
-                    </div>
-                </div>
-
-                <!-- Uploads Tab -->
-                <div class="history-content" id="uploadsTab" style="display: none;">
-                    <div class="history-actions">
-                        <button class="btn-secondary btn-sm" id="refreshUploads">
-                            <span class="btn-icon">🔄</span> Refresh
-                        </button>
-                        <button class="btn-secondary btn-sm btn-danger" id="deleteAllUploads">
-                            <span class="btn-icon">🗑️</span> Delete All
-                        </button>
-                    </div>
-                    <div class="history-list" id="uploadsList">
-                        <div class="history-placeholder">No uploads yet</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Toggle History Button -->
-            <div class="toggle-history-btn">
-                <button class="btn-secondary" id="toggleHistory">
-                    <span class="btn-icon">📚</span> View History
-                </button>
+                </aside>
             </div>
         </main>
 
         <!-- Footer -->
         <footer class="footer">
             <p>
-                Powered by <strong>Mistral AI Voxtral-Mini-3B</strong> |
-                Privacy-focused local processing |
-                <a href="https://github.com/debrockb/transcribe-voxtral" target="_blank">GitHub</a>
+                Crafted with ❤️ by Voxtral | Powered by <strong>Mistral AI Voxtral-Mini-3B</strong> |
+                <a href="https://github.com/debrockb/transcribe-voxtral" target="_blank" rel="noreferrer">GitHub</a>
             </p>
         </footer>
     </div>

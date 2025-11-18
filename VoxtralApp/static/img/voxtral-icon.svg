@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="36" y1="20" x2="236" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#151B2B"/>
+      <stop offset="1" stop-color="#272D42"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="48" y1="64" x2="208" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7BA4B" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#E28A1A" stop-opacity="0.65"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <g stroke="url(#glow)" stroke-width="10" stroke-linecap="round">
+    <line x1="128" y1="128" x2="198" y2="74"/>
+    <line x1="128" y1="128" x2="78" y2="64"/>
+    <line x1="128" y1="128" x2="66" y2="184"/>
+    <line x1="128" y1="128" x2="198" y2="184"/>
+    <line x1="128" y1="128" x2="128" y2="48"/>
+  </g>
+  <circle cx="128" cy="128" r="34" fill="none" stroke="url(#glow)" stroke-width="10"/>
+  <circle cx="128" cy="48" r="16" fill="none" stroke="url(#glow)" stroke-width="8"/>
+  <circle cx="198" cy="74" r="20" fill="none" stroke="url(#glow)" stroke-width="8"/>
+  <circle cx="78" cy="64" r="18" fill="none" stroke="url(#glow)" stroke-width="8"/>
+  <circle cx="66" cy="184" r="22" fill="none" stroke="url(#glow)" stroke-width="8"/>
+  <circle cx="198" cy="184" r="24" fill="none" stroke="url(#glow)" stroke-width="8"/>
+</svg>

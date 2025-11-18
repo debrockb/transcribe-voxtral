@@ -2,7 +2,7 @@
 
 A Flask-based web application for transcribing audio and video files using the Mistral AI Voxtral-Mini-3B model. Features a modern web interface with real-time progress updates, REST API, and WebSocket support, while leveraging local AI processing for privacy-focused, cost-free transcription.
 
-![Transcribe Voxtral hero banner](VoxtralApp/assets/voxtral_banner.svg)
+![Record. Transcribe. Save time banner](VoxtralApp/assets/voxtral_banner.svg)
 
 ## Features
 

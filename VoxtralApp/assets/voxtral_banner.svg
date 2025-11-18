@@ -23,11 +23,13 @@
     <text font-size="54" font-weight="700" letter-spacing="0.04em">VOXTRAL TRANSCRIPTION</text>
     <text y="76" font-size="26" fill="#5D5C76">Simply Bastiaan · Local-first transcription studio</text>
   </g>
-  <g transform="translate(120 310)" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#1A1844">
-    <text font-size="84" font-weight="600">Drop. Transcribe. Deliver.</text>
-    <text y="120" font-size="28" fill="#5D5C76">• On-device privacy</text>
-    <text x="320" y="120" font-size="28" fill="#5D5C76">• Amber-guided UI</text>
-    <text x="640" y="120" font-size="28" fill="#5D5C76">• Mistral Mini 3B</text>
+  <g transform="translate(120 290)" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#1A1844">
+    <text font-size="92" font-weight="700">Record. Transcribe. Save time.</text>
+  </g>
+  <g transform="translate(120 400)" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" fill="#5D5C76">
+    <text font-size="30">• On-device application</text>
+    <text x="360" font-size="30">• Full data ownership</text>
+    <text x="720" font-size="30">• No cloud, ever</text>
   </g>
   <g transform="translate(120 500)" font-family="'Space Mono', 'Fira Code', 'Courier New', monospace">
     <rect width="560" height="70" rx="22" fill="rgba(26,24,68,0.08)" stroke="rgba(26,24,68,0.18)"/>

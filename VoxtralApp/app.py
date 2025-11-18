@@ -19,6 +19,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 
+from config_manager import config
 from transcription_engine import TranscriptionEngine
 from update_checker import check_for_updates, get_current_version
 
@@ -51,8 +52,9 @@ logger = logging.getLogger(__name__)
 jobs = {}  # {job_id: {status, progress, transcript, etc}}
 uploaded_files = {}  # {file_id: {filename, path, size, etc}}
 
-# Initialize transcription engine (loaded once at startup)
+# Transcription engine (loaded after user selects model)
 transcription_engine = None
+engine_loading = False  # Flag to track if model is currently loading
 
 
 def allowed_file(filename):
@@ -179,6 +181,102 @@ def index():
 def health_check():
     """Health check endpoint for monitoring."""
     return jsonify({"status": "ok", "message": "Voxtral transcription service is running"})
+
+
+@app.route("/api/models", methods=["GET"])
+def get_available_models():
+    """Get list of available models."""
+    try:
+        models = config.get_all_models()
+        current_version = config.get("model.version", "full")
+
+        # Format response with additional UI-friendly information
+        models_list = []
+        for key, model_info in models.items():
+            models_list.append(
+                {
+                    "id": key,
+                    "name": model_info.get("name"),
+                    "size_gb": model_info.get("size_gb"),
+                    "format": model_info.get("format"),
+                    "description": model_info.get("description"),
+                    "memory_requirements": model_info.get("memory_requirements"),
+                    "is_current": key == current_version,
+                    "is_loaded": transcription_engine is not None and key == current_version,
+                }
+            )
+
+        return jsonify({"models": models_list, "current_version": current_version})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/model/status", methods=["GET"])
+def get_model_status():
+    """Get current model loading status."""
+    if transcription_engine:
+        model_config = config.get_model_config()
+        return jsonify(
+            {
+                "loaded": True,
+                "loading": False,
+                "model": model_config.get("name"),
+                "model_id": model_config.get("id"),
+                "version": config.get("model.version"),
+                "device": transcription_engine.device if hasattr(transcription_engine, "device") else "unknown",
+            }
+        )
+    elif engine_loading:
+        return jsonify({"loaded": False, "loading": True, "message": "Model is currently loading..."})
+    else:
+        return jsonify({"loaded": False, "loading": False, "message": "No model loaded. Please select a model to begin."})
+
+
+@app.route("/api/model/initialize", methods=["POST"])
+def initialize_model():
+    """Initialize model with selected version."""
+    global transcription_engine
+
+    if transcription_engine:
+        return (
+            jsonify({"status": "error", "message": "Model already loaded. Please reload the application to change models."}),
+            400,
+        )
+
+    if engine_loading:
+        return jsonify({"status": "error", "message": "Model is currently loading. Please wait."}), 409
+
+    data = request.get_json()
+    model_version = data.get("version", "full")
+
+    # Validate model version
+    available_models = config.get_all_models()
+    if model_version not in available_models:
+        return jsonify({"status": "error", "message": f"Invalid model version: {model_version}"}), 400
+
+    try:
+        # Initialize engine in background thread to not block the API
+        def load_model():
+            try:
+                initialize_engine(model_version)
+            except Exception as e:
+                logger.error(f"Failed to load model in background: {e}")
+
+        thread = threading.Thread(target=load_model, daemon=False)
+        thread.start()
+
+        model_config = config.get_model_config(model_version)
+        return jsonify(
+            {
+                "status": "loading",
+                "message": f"Loading {model_config.get('name')}...",
+                "model": model_config.get("name"),
+                "version": model_version,
+            }
+        )
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to start model loading: {str(e)}"}), 500
 
 
 @app.route("/api/upload", methods=["POST"])
@@ -623,20 +721,22 @@ def get_memory_status():
         else:
             status = "normal"
 
-        return jsonify({
-            "system": {
-                "total_gb": round(system_memory.total / (1024**3), 2),
-                "available_gb": round(system_memory.available / (1024**3), 2),
-                "used_gb": round(system_memory.used / (1024**3), 2),
-                "percent": round(percent, 1),
-                "status": status
-            },
-            "process": {
-                "rss_mb": round(process_memory.rss / (1024**2), 2),
-                "vms_mb": round(process_memory.vms / (1024**2), 2),
-                "percent": round(process.memory_percent(), 2)
+        return jsonify(
+            {
+                "system": {
+                    "total_gb": round(system_memory.total / (1024**3), 2),
+                    "available_gb": round(system_memory.available / (1024**3), 2),
+                    "used_gb": round(system_memory.used / (1024**3), 2),
+                    "percent": round(percent, 1),
+                    "status": status,
+                },
+                "process": {
+                    "rss_mb": round(process_memory.rss / (1024**2), 2),
+                    "vms_mb": round(process_memory.vms / (1024**2), 2),
+                    "percent": round(process.memory_percent(), 2),
+                },
             }
-        })
+        )
 
     except Exception as e:
         logger.error(f"Error getting memory status: {e}")
@@ -646,10 +746,7 @@ def get_memory_status():
 @app.route("/api/version", methods=["GET"])
 def get_version():
     """Get current application version."""
-    return jsonify({
-        "version": get_current_version(),
-        "app_name": "Voxtral Transcription"
-    })
+    return jsonify({"version": get_current_version(), "app_name": "Voxtral Transcription"})
 
 
 @app.route("/api/updates/check", methods=["GET"])
@@ -660,11 +757,7 @@ def check_updates():
         return jsonify(update_info)
     except Exception as e:
         logger.error(f"Error checking for updates: {e}")
-        return jsonify({
-            "update_available": False,
-            "current_version": get_current_version(),
-            "error": str(e)
-        }), 500
+        return jsonify({"update_available": False, "current_version": get_current_version(), "error": str(e)}), 500
 
 
 # WebSocket events
@@ -722,9 +815,14 @@ def start_memory_monitor():
     logger.info("Memory monitoring started")
 
 
-def initialize_engine():
-    """Initialize the transcription engine at startup."""
-    global transcription_engine
+def initialize_engine(model_version=None):
+    """
+    Initialize the transcription engine with specified model.
+
+    Args:
+        model_version: Model version to load ('full' or 'gguf'). Uses config default if None.
+    """
+    global transcription_engine, engine_loading
 
     # Skip model loading in test mode (saves memory and time in CI/CD)
     if os.environ.get("TESTING") == "1":
@@ -734,25 +832,58 @@ def initialize_engine():
         transcription_engine = MagicMock()
         transcription_engine.device = "cpu"
         transcription_engine.transcribe_file = MagicMock(return_value=None)
+        engine_loading = False
         return
 
     try:
-        logger.info("Initializing Voxtral transcription engine...")
-        transcription_engine = TranscriptionEngine()
-        logger.info("Engine initialized successfully")
+        engine_loading = True
+
+        # Get model configuration
+        if model_version:
+            model_config = config.get_model_config(model_version)
+        else:
+            model_config = config.get_model_config()
+
+        model_id = model_config.get("id")
+        model_name = model_config.get("name", "Unknown")
+
+        logger.info(f"Initializing transcription engine with model: {model_name} ({model_id})")
+
+        # Emit loading progress via WebSocket
+        socketio.emit("model_loading", {"status": "loading", "model": model_name, "message": f"Loading {model_name}..."})
+
+        transcription_engine = TranscriptionEngine(model_id=model_id)
+
+        # Save the selected model version to config
+        if model_version:
+            config.set_model_version(model_version)
+
+        socketio.emit(
+            "model_loading", {"status": "loaded", "model": model_name, "message": f"{model_name} loaded successfully!"}
+        )
+
+        logger.info(f"Engine initialized successfully with {model_name}")
+        engine_loading = False
+
     except Exception as e:
         logger.error(f"Failed to initialize engine: {e}")
+        engine_loading = False
+        socketio.emit("model_loading", {"status": "error", "message": f"Failed to load model: {str(e)}"})
         raise
 
 
 if __name__ == "__main__":
-    # Initialize engine before starting server
-    initialize_engine()
+    # DON'T load the model on startup - let users select it first!
+    # Model will be loaded after user selection in the web UI
+
+    # Start memory monitoring
+    start_memory_monitoring()
 
     # Start Flask-SocketIO server
     # Using port 8000 as port 5000 is often used by macOS AirPlay Receiver
     port = int(os.environ.get("PORT", 8000))
     logger.info(f"Starting Voxtral Web Application on port {port}...")
     logger.info(f"Access the application at: http://localhost:{port}")
+    logger.info("Model will be loaded after user selection in the web UI")
 
     socketio.run(app, host="0.0.0.0", port=port, debug=True, allow_unsafe_werkzeug=True)

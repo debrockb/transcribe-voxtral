@@ -73,10 +73,40 @@ class TranscriptionEngine:
         try:
             self._emit_progress({"status": "loading_model", "message": f"Loading model '{self.model_id}'...", "progress": 0})
 
-            self.processor = AutoProcessor.from_pretrained(self.model_id)
-            self.model = VoxtralForConditionalGeneration.from_pretrained(
-                self.model_id, torch_dtype=self.dtype, device_map=self.device
-            )
+            # Check if this is a GGUF model
+            is_gguf = "GGUF" in self.model_id or "gguf" in self.model_id.lower()
+
+            if is_gguf:
+                logger.info(f"Detected GGUF model format: {self.model_id}")
+                # For GGUF models, we need to specify the filename
+                # Try to get the GGUF filename from config if available
+                from config_manager import config
+                model_config = config.get_model_config()
+                gguf_filename = model_config.get("filename")
+
+                if gguf_filename:
+                    logger.info(f"Loading GGUF file: {gguf_filename}")
+                    self.processor = AutoProcessor.from_pretrained(self.model_id, gguf_file=gguf_filename)
+                    self.model = VoxtralForConditionalGeneration.from_pretrained(
+                        self.model_id,
+                        torch_dtype=self.dtype,
+                        device_map=self.device,
+                        gguf_file=gguf_filename
+                    )
+                else:
+                    # Fallback: try loading without explicit filename
+                    logger.warning("GGUF filename not specified in config, attempting auto-detection")
+                    self.processor = AutoProcessor.from_pretrained(self.model_id)
+                    self.model = VoxtralForConditionalGeneration.from_pretrained(
+                        self.model_id, torch_dtype=self.dtype, device_map=self.device
+                    )
+            else:
+                # Standard safetensors loading
+                logger.info(f"Loading safetensors model: {self.model_id}")
+                self.processor = AutoProcessor.from_pretrained(self.model_id)
+                self.model = VoxtralForConditionalGeneration.from_pretrained(
+                    self.model_id, torch_dtype=self.dtype, device_map=self.device
+                )
 
             self._emit_progress(
                 {
@@ -205,7 +235,9 @@ class TranscriptionEngine:
             # Adjust chunk duration based on available memory
             optimal_chunk_duration = self._get_optimal_chunk_duration(chunk_duration_s)
             if optimal_chunk_duration != chunk_duration_s:
-                logger.info(f"Chunk duration adjusted from {chunk_duration_s}s to {optimal_chunk_duration}s for memory optimization")
+                logger.info(
+                    f"Chunk duration adjusted from {chunk_duration_s}s to {optimal_chunk_duration}s for memory optimization"
+                )
             chunk_len = optimal_chunk_duration * sample_rate
             all_transcriptions = []
             num_chunks = int(np.ceil(len(waveform) / chunk_len))

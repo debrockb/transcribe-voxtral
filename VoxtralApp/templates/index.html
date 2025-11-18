@@ -108,6 +108,54 @@
                     </div>
                 </div>
             </section>
+
+            <!-- History Section -->
+            <section class="history-section" id="historySection" style="display: none;">
+                <div class="history-header">
+                    <h3>📚 History</h3>
+                    <div class="history-tabs">
+                        <button class="tab-btn active" id="tabTranscriptions">Transcriptions</button>
+                        <button class="tab-btn" id="tabUploads">Uploads</button>
+                    </div>
+                </div>
+
+                <!-- Transcriptions Tab -->
+                <div class="history-content" id="transcriptionsTab">
+                    <div class="history-actions">
+                        <button class="btn-secondary btn-sm" id="refreshTranscriptions">
+                            <span class="btn-icon">🔄</span> Refresh
+                        </button>
+                        <button class="btn-secondary btn-sm btn-danger" id="deleteAllTranscriptions">
+                            <span class="btn-icon">🗑️</span> Delete All
+                        </button>
+                    </div>
+                    <div class="history-list" id="transcriptionsList">
+                        <div class="history-placeholder">No transcriptions yet</div>
+                    </div>
+                </div>
+
+                <!-- Uploads Tab -->
+                <div class="history-content" id="uploadsTab" style="display: none;">
+                    <div class="history-actions">
+                        <button class="btn-secondary btn-sm" id="refreshUploads">
+                            <span class="btn-icon">🔄</span> Refresh
+                        </button>
+                        <button class="btn-secondary btn-sm btn-danger" id="deleteAllUploads">
+                            <span class="btn-icon">🗑️</span> Delete All
+                        </button>
+                    </div>
+                    <div class="history-list" id="uploadsList">
+                        <div class="history-placeholder">No uploads yet</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Toggle History Button -->
+            <div class="toggle-history-btn">
+                <button class="btn-secondary" id="toggleHistory">
+                    <span class="btn-icon">📚</span> View History
+                </button>
+            </div>
         </main>
 
         <!-- Footer -->

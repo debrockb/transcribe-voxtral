@@ -401,6 +401,157 @@ body {
     display: none;
 }
 
+/* History Section */
+.history-section {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    margin-top: 24px;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.history-header h3 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.history-tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.tab-btn {
+    padding: 8px 16px;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.tab-btn:hover {
+    background: var(--border-color);
+}
+
+.tab-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.history-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 0.875rem;
+}
+
+.btn-danger {
+    background: var(--error-color);
+    color: white;
+    border-color: var(--error-color);
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+.history-list {
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.history-placeholder {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.history-item {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s ease;
+}
+
+.history-item:last-child {
+    border-bottom: none;
+}
+
+.history-item:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.history-item-info {
+    flex: 1;
+}
+
+.history-item-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.history-item-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon-only {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 8px;
+    border-radius: var(--radius);
+    transition: all 0.2s ease;
+}
+
+.btn-icon-only:hover {
+    background: var(--background);
+    transform: scale(1.1);
+}
+
+.toggle-history-btn {
+    text-align: center;
+    margin-top: 24px;
+}
+
+.toggle-history-btn button {
+    min-width: 200px;
+}
+
 /* Footer */
 .footer {
     text-align: center;

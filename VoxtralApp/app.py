@@ -381,6 +381,157 @@ def get_device_info():
     return jsonify({'error': 'Engine not initialized'}), 503
 
 
+@app.route('/api/history/transcriptions', methods=['GET'])
+def list_transcriptions():
+    """List all saved transcriptions."""
+    try:
+        transcriptions = []
+        if OUTPUT_FOLDER.exists():
+            for file_path in OUTPUT_FOLDER.glob('*.txt'):
+                stat = file_path.stat()
+                transcriptions.append({
+                    'filename': file_path.name,
+                    'size': stat.st_size,
+                    'size_kb': round(stat.st_size / 1024, 2),
+                    'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+                })
+
+        # Sort by modified date (newest first)
+        transcriptions.sort(key=lambda x: x['modified'], reverse=True)
+        return jsonify(transcriptions)
+
+    except Exception as e:
+        logger.error(f"Error listing transcriptions: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/history/transcriptions/<filename>', methods=['GET'])
+def get_transcription_content(filename):
+    """Get content of a specific transcription."""
+    try:
+        file_path = OUTPUT_FOLDER / filename
+
+        if not file_path.exists():
+            return jsonify({'error': 'File not found'}), 404
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        return jsonify({
+            'filename': filename,
+            'content': content,
+            'size': file_path.stat().st_size,
+            'word_count': len(content.split()),
+            'char_count': len(content)
+        })
+
+    except Exception as e:
+        logger.error(f"Error reading transcription {filename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/history/transcriptions/<filename>', methods=['DELETE'])
+def delete_transcription(filename):
+    """Delete a specific transcription."""
+    try:
+        file_path = OUTPUT_FOLDER / filename
+
+        if not file_path.exists():
+            return jsonify({'error': 'File not found'}), 404
+
+        file_path.unlink()
+        logger.info(f"Deleted transcription: {filename}")
+
+        return jsonify({'status': 'success', 'message': f'Deleted {filename}'})
+
+    except Exception as e:
+        logger.error(f"Error deleting transcription {filename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/history/transcriptions/all', methods=['DELETE'])
+def delete_all_transcriptions():
+    """Delete all transcriptions."""
+    try:
+        count = 0
+        if OUTPUT_FOLDER.exists():
+            for file_path in OUTPUT_FOLDER.glob('*.txt'):
+                file_path.unlink()
+                count += 1
+
+        logger.info(f"Deleted {count} transcriptions")
+        return jsonify({'status': 'success', 'count': count, 'message': f'Deleted {count} transcriptions'})
+
+    except Exception as e:
+        logger.error(f"Error deleting all transcriptions: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/history/uploads', methods=['GET'])
+def list_uploads():
+    """List all uploaded files."""
+    try:
+        uploads = []
+        if UPLOAD_FOLDER.exists():
+            for file_path in UPLOAD_FOLDER.glob('*'):
+                if file_path.is_file():
+                    stat = file_path.stat()
+                    uploads.append({
+                        'filename': file_path.name,
+                        'size': stat.st_size,
+                        'size_mb': round(stat.st_size / (1024 * 1024), 2),
+                        'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                        'modified': datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    })
+
+        # Sort by modified date (newest first)
+        uploads.sort(key=lambda x: x['modified'], reverse=True)
+        return jsonify(uploads)
+
+    except Exception as e:
+        logger.error(f"Error listing uploads: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/history/uploads/<filename>', methods=['DELETE'])
+def delete_upload(filename):
+    """Delete a specific uploaded file."""
+    try:
+        file_path = UPLOAD_FOLDER / filename
+
+        if not file_path.exists():
+            return jsonify({'error': 'File not found'}), 404
+
+        file_path.unlink()
+        logger.info(f"Deleted upload: {filename}")
+
+        return jsonify({'status': 'success', 'message': f'Deleted {filename}'})
+
+    except Exception as e:
+        logger.error(f"Error deleting upload {filename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/history/uploads/all', methods=['DELETE'])
+def delete_all_uploads():
+    """Delete all uploaded files."""
+    try:
+        count = 0
+        if UPLOAD_FOLDER.exists():
+            for file_path in UPLOAD_FOLDER.glob('*'):
+                if file_path.is_file():
+                    file_path.unlink()
+                    count += 1
+
+        logger.info(f"Deleted {count} uploads")
+        return jsonify({'status': 'success', 'count': count, 'message': f'Deleted {count} uploads'})
+
+    except Exception as e:
+        logger.error(f"Error deleting all uploads: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # WebSocket events
 
 @socketio.on('connect')
@@ -413,7 +564,8 @@ if __name__ == '__main__':
     initialize_engine()
 
     # Start Flask-SocketIO server
-    port = int(os.environ.get('PORT', 5000))
+    # Using port 8000 as port 5000 is often used by macOS AirPlay Receiver
+    port = int(os.environ.get('PORT', 8000))
     logger.info(f"Starting Voxtral Web Application on port {port}...")
     logger.info(f"Access the application at: http://localhost:{port}")
 

@@ -417,6 +417,259 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+// History Management Functions
+
+const historyElements = {
+    historySection: document.getElementById('historySection'),
+    toggleHistoryBtn: document.getElementById('toggleHistory'),
+    tabTranscriptions: document.getElementById('tabTranscriptions'),
+    tabUploads: document.getElementById('tabUploads'),
+    transcriptionsTab: document.getElementById('transcriptionsTab'),
+    uploadsTab: document.getElementById('uploadsTab'),
+    transcriptionsList: document.getElementById('transcriptionsList'),
+    uploadsList: document.getElementById('uploadsList'),
+    refreshTranscriptions: document.getElementById('refreshTranscriptions'),
+    refreshUploads: document.getElementById('refreshUploads'),
+    deleteAllTranscriptions: document.getElementById('deleteAllTranscriptions'),
+    deleteAllUploads: document.getElementById('deleteAllUploads')
+};
+
+// Toggle history section
+if (historyElements.toggleHistoryBtn) {
+    historyElements.toggleHistoryBtn.addEventListener('click', () => {
+        const isVisible = historyElements.historySection.style.display !== 'none';
+        historyElements.historySection.style.display = isVisible ? 'none' : 'block';
+        historyElements.toggleHistoryBtn.textContent = isVisible ? '📚 View History' : '📚 Hide History';
+
+        if (!isVisible) {
+            loadTranscriptions();
+        }
+    });
+}
+
+// Tab switching
+if (historyElements.tabTranscriptions) {
+    historyElements.tabTranscriptions.addEventListener('click', () => {
+        historyElements.tabTranscriptions.classList.add('active');
+        historyElements.tabUploads.classList.remove('active');
+        historyElements.transcriptionsTab.style.display = 'block';
+        historyElements.uploadsTab.style.display = 'none';
+        loadTranscriptions();
+    });
+}
+
+if (historyElements.tabUploads) {
+    historyElements.tabUploads.addEventListener('click', () => {
+        historyElements.tabUploads.classList.add('active');
+        historyElements.tabTranscriptions.classList.remove('active');
+        historyElements.uploadsTab.style.display = 'block';
+        historyElements.transcriptionsTab.style.display = 'none';
+        loadUploads();
+    });
+}
+
+// Load transcriptions
+async function loadTranscriptions() {
+    try {
+        const response = await fetch('/api/history/transcriptions');
+        const transcriptions = await response.json();
+
+        if (transcriptions.length === 0) {
+            historyElements.transcriptionsList.innerHTML = '<div class="history-placeholder">No transcriptions yet</div>';
+            return;
+        }
+
+        historyElements.transcriptionsList.innerHTML = transcriptions.map(item => `
+            <div class="history-item">
+                <div class="history-item-info">
+                    <div class="history-item-name">${item.filename}</div>
+                    <div class="history-item-meta">
+                        <span>${item.size_kb} KB</span>
+                        <span>${new Date(item.modified).toLocaleString()}</span>
+                    </div>
+                </div>
+                <div class="history-item-actions">
+                    <button class="btn-icon-only" onclick="viewTranscription('${item.filename}')" title="View">
+                        👁️
+                    </button>
+                    <button class="btn-icon-only" onclick="downloadTranscriptionFile('${item.filename}')" title="Download">
+                        💾
+                    </button>
+                    <button class="btn-icon-only" onclick="deleteTranscription('${item.filename}')" title="Delete">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Error loading transcriptions:', error);
+        showToast('Failed to load transcriptions', 'error');
+    }
+}
+
+// Load uploads
+async function loadUploads() {
+    try {
+        const response = await fetch('/api/history/uploads');
+        const uploads = await response.json();
+
+        if (uploads.length === 0) {
+            historyElements.uploadsList.innerHTML = '<div class="history-placeholder">No uploads yet</div>';
+            return;
+        }
+
+        historyElements.uploadsList.innerHTML = uploads.map(item => `
+            <div class="history-item">
+                <div class="history-item-info">
+                    <div class="history-item-name">${item.filename}</div>
+                    <div class="history-item-meta">
+                        <span>${item.size_mb} MB</span>
+                        <span>${new Date(item.modified).toLocaleString()}</span>
+                    </div>
+                </div>
+                <div class="history-item-actions">
+                    <button class="btn-icon-only" onclick="deleteUpload('${item.filename}')" title="Delete">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Error loading uploads:', error);
+        showToast('Failed to load uploads', 'error');
+    }
+}
+
+// View transcription
+async function viewTranscription(filename) {
+    try {
+        const response = await fetch(`/api/history/transcriptions/${encodeURIComponent(filename)}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            elements.transcriptContent.textContent = data.content;
+            elements.wordCount.textContent = data.word_count.toLocaleString();
+            elements.charCount.textContent = data.char_count.toLocaleString();
+            elements.transcriptSection.style.display = 'block';
+            elements.transcriptSection.scrollIntoView({ behavior: 'smooth' });
+            showToast('Transcription loaded', 'success');
+        } else {
+            throw new Error(data.error || 'Failed to load transcription');
+        }
+    } catch (error) {
+        console.error('Error viewing transcription:', error);
+        showToast('Failed to load transcription', 'error');
+    }
+}
+
+// Download transcription file
+function downloadTranscriptionFile(filename) {
+    window.location.href = `/api/history/transcriptions/${encodeURIComponent(filename)}`;
+}
+
+// Delete transcription
+async function deleteTranscription(filename) {
+    if (!confirm(`Delete "${filename}"?`)) return;
+
+    try {
+        const response = await fetch(`/api/history/transcriptions/${encodeURIComponent(filename)}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            showToast('Transcription deleted', 'success');
+            loadTranscriptions();
+        } else {
+            throw new Error('Failed to delete');
+        }
+    } catch (error) {
+        console.error('Error deleting transcription:', error);
+        showToast('Failed to delete transcription', 'error');
+    }
+}
+
+// Delete upload
+async function deleteUpload(filename) {
+    if (!confirm(`Delete "${filename}"?`)) return;
+
+    try {
+        const response = await fetch(`/api/history/uploads/${encodeURIComponent(filename)}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            showToast('Upload deleted', 'success');
+            loadUploads();
+        } else {
+            throw new Error('Failed to delete');
+        }
+    } catch (error) {
+        console.error('Error deleting upload:', error);
+        showToast('Failed to delete upload', 'error');
+    }
+}
+
+// Delete all transcriptions
+if (historyElements.deleteAllTranscriptions) {
+    historyElements.deleteAllTranscriptions.addEventListener('click', async () => {
+        if (!confirm('Delete ALL transcriptions? This cannot be undone!')) return;
+
+        try {
+            const response = await fetch('/api/history/transcriptions/all', {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast(`Deleted ${data.count} transcriptions`, 'success');
+                loadTranscriptions();
+            } else {
+                throw new Error('Failed to delete all');
+            }
+        } catch (error) {
+            console.error('Error deleting all transcriptions:', error);
+            showToast('Failed to delete all transcriptions', 'error');
+        }
+    });
+}
+
+// Delete all uploads
+if (historyElements.deleteAllUploads) {
+    historyElements.deleteAllUploads.addEventListener('click', async () => {
+        if (!confirm('Delete ALL uploads? This cannot be undone!')) return;
+
+        try {
+            const response = await fetch('/api/history/uploads/all', {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showToast(`Deleted ${data.count} uploads`, 'success');
+                loadUploads();
+            } else {
+                throw new Error('Failed to delete all');
+            }
+        } catch (error) {
+            console.error('Error deleting all uploads:', error);
+            showToast('Failed to delete all uploads', 'error');
+        }
+    });
+}
+
+// Refresh buttons
+if (historyElements.refreshTranscriptions) {
+    historyElements.refreshTranscriptions.addEventListener('click', loadTranscriptions);
+}
+
+if (historyElements.refreshUploads) {
+    historyElements.refreshUploads.addEventListener('click', loadUploads);
+}
+
 // Initialize app when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

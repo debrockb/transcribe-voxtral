@@ -18,15 +18,15 @@ if not exist "voxtral_env\" (
     )
 )
 
-REM Activate virtual environment
-echo Activating virtual environment...
-call voxtral_env\Scripts\activate.bat
+REM Use the virtual environment's Python directly
+set PYTHON_BIN=voxtral_env\Scripts\python.exe
+set PIP_BIN=voxtral_env\Scripts\pip.exe
 
 REM Check if Flask is installed
-python -c "import flask" 2>nul
+%PYTHON_BIN% -c "import flask" 2>nul
 if errorlevel 1 (
     echo Installing dependencies...
-    pip install -r requirements.txt
+    %PIP_BIN% install -r requirements.txt
     if errorlevel 1 (
         echo Failed to install dependencies.
         pause
@@ -36,13 +36,13 @@ if errorlevel 1 (
 
 echo.
 echo Starting web server...
-echo Access the application at: http://localhost:5000
+echo Access the application at: http://localhost:8000
 echo.
 echo Press Ctrl+C to stop the server
 echo ============================================
 echo.
 
 REM Start the Flask application
-python app.py
+%PYTHON_BIN% app.py
 
 pause

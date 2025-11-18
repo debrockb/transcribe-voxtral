@@ -56,11 +56,11 @@ jobs:
       run: |
         echo "Running platform-specific tests for ${{ matrix.os }}"
         if [ "${{ runner.os }}" == "Windows" ]; then
-          pytest tests/test_platform_compatibility.py -v -m "windows or cross_platform"
+          pytest tests/test_platform_compatibility.py -v -m "(windows or cross_platform) and not requires_model and not requires_gpu"
         elif [ "${{ runner.os }}" == "macOS" ]; then
-          pytest tests/test_platform_compatibility.py -v -m "macos or cross_platform"
+          pytest tests/test_platform_compatibility.py -v -m "(macos or cross_platform) and not requires_model and not requires_gpu"
         else
-          pytest tests/test_platform_compatibility.py -v -m "linux or cross_platform"
+          pytest tests/test_platform_compatibility.py -v -m "(linux or cross_platform) and not requires_model and not requires_gpu"
         fi
       shell: bash
       env:
@@ -98,23 +98,18 @@ jobs:
     - name: Check code formatting with Black
       working-directory: VoxtralApp
       run: |
-        black --check --diff .
-      continue-on-error: true
+        black --check .
 
     - name: Check import sorting with isort
       working-directory: VoxtralApp
       run: |
-        isort --check-only --diff .
-      continue-on-error: true
+        isort --check-only .
 
     - name: Lint with flake8
       working-directory: VoxtralApp
       run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      continue-on-error: true
+        # Use .flake8 configuration file
+        flake8 . --config=.flake8
 
   build:
     name: Build Check

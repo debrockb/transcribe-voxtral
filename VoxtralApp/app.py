@@ -550,6 +550,16 @@ def handle_disconnect():
 def initialize_engine():
     """Initialize the transcription engine at startup."""
     global transcription_engine
+
+    # Skip model loading in test mode (saves memory and time in CI/CD)
+    if os.environ.get('TESTING') == '1':
+        logger.info("Test mode detected - skipping model initialization")
+        from unittest.mock import MagicMock
+        transcription_engine = MagicMock()
+        transcription_engine.device = "cpu"
+        transcription_engine.transcribe_file = MagicMock(return_value=None)
+        return
+
     try:
         logger.info("Initializing Voxtral transcription engine...")
         transcription_engine = TranscriptionEngine()

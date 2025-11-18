@@ -46,9 +46,26 @@ jobs:
     - name: Run tests with pytest
       working-directory: VoxtralApp
       run: |
-        pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing
+        pytest tests/ -v --tb=short --cov=. --cov-report=xml --cov-report=term-missing -m "not slow and not requires_model and not requires_gpu"
       env:
         PYTHONPATH: ${{ github.workspace }}/VoxtralApp
+        TESTING: "1"
+
+    - name: Run platform-specific tests
+      working-directory: VoxtralApp
+      run: |
+        echo "Running platform-specific tests for ${{ matrix.os }}"
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          pytest tests/test_platform_compatibility.py -v -m "windows or cross_platform"
+        elif [ "${{ runner.os }}" == "macOS" ]; then
+          pytest tests/test_platform_compatibility.py -v -m "macos or cross_platform"
+        else
+          pytest tests/test_platform_compatibility.py -v -m "linux or cross_platform"
+        fi
+      shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}/VoxtralApp
+        TESTING: "1"
 
     - name: Upload coverage reports to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
@@ -128,8 +145,11 @@ jobs:
     - name: Verify application structure
       working-directory: VoxtralApp
       run: |
+        export TESTING=1
         python -c "import app; print('Flask app imported successfully')"
         python -c "import transcription_engine; print('TranscriptionEngine imported successfully')"
+      env:
+        TESTING: "1"
 
     - name: Check for security vulnerabilities
       run: |
@@ -166,9 +186,10 @@ jobs:
     - name: Run integration tests
       working-directory: VoxtralApp
       run: |
-        pytest tests/test_integration.py -v -m integration --tb=short
+        pytest tests/test_integration.py -v -m "integration and not requires_model and not requires_gpu" --tb=short
       env:
         PYTHONPATH: ${{ github.workspace }}/VoxtralApp
+        TESTING: "1"
 
   notify:
     name: Notification

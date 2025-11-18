@@ -12,6 +12,12 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Mock heavy dependencies BEFORE importing app to prevent model loading
+# This is critical for CI/CD environments without GPU
+os.environ['TESTING'] = '1'  # Signal to app.py that we're in test mode
+
+
+# Import app AFTER setting up environment
 from app import app as flask_app, socketio
 
 
@@ -78,12 +84,30 @@ def mock_transcription_engine():
         yield instance
 
 
-@pytest.fixture
-def mock_torch():
-    """Mock PyTorch to avoid GPU/CUDA dependencies in tests."""
+@pytest.fixture(autouse=True)
+def mock_heavy_dependencies():
+    """
+    Automatically mock heavy ML dependencies to prevent model loading in tests.
+    This fixture runs for ALL tests unless explicitly disabled.
+    """
+    # Mock torch and related libraries
     with patch('torch.cuda.is_available', return_value=False), \
-         patch('torch.backends.mps.is_available', return_value=False):
-        yield
+         patch('torch.backends.mps.is_available', return_value=False), \
+         patch('torch.load', return_value={}), \
+         patch('transformers.AutoModelForSpeechSeq2Seq.from_pretrained') as mock_model, \
+         patch('transformers.AutoProcessor.from_pretrained') as mock_processor, \
+         patch('transformers.pipeline') as mock_pipeline:
+
+        # Configure mocks
+        mock_model.return_value = MagicMock()
+        mock_processor.return_value = MagicMock()
+        mock_pipeline.return_value = MagicMock(return_value={"text": "Mocked transcription"})
+
+        yield {
+            'model': mock_model,
+            'processor': mock_processor,
+            'pipeline': mock_pipeline
+        }
 
 
 @pytest.fixture(autouse=True)

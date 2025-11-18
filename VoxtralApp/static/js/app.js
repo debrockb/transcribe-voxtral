@@ -420,7 +420,7 @@ function showToast(message, type = 'info') {
 // History Management Functions
 
 const historyElements = {
-    historyDrawer: document.getElementById('historyDrawer'),
+    historyOverlay: document.getElementById('historyOverlay'),
     historyBackdrop: document.getElementById('historyBackdrop'),
     historySection: document.getElementById('historySection'),
     toggleHistoryBtn: document.getElementById('toggleHistory'),
@@ -437,10 +437,10 @@ const historyElements = {
     deleteAllUploads: document.getElementById('deleteAllUploads')
 };
 
-function toggleHistoryDrawer(show) {
-    if (!historyElements.historyDrawer) return;
-    const shouldShow = typeof show === 'boolean' ? show : !historyElements.historyDrawer.classList.contains('open');
-    historyElements.historyDrawer.classList.toggle('open', shouldShow);
+function toggleHistoryOverlay(show) {
+    if (!historyElements.historyOverlay) return;
+    const shouldShow = typeof show === 'boolean' ? show : !historyElements.historyOverlay.classList.contains('open');
+    historyElements.historyOverlay.classList.toggle('open', shouldShow);
     if (historyElements.toggleHistoryBtn) {
         historyElements.toggleHistoryBtn.innerHTML = shouldShow
             ? '<span class="btn-icon">📚</span> Hide History'
@@ -452,20 +452,20 @@ function toggleHistoryDrawer(show) {
 }
 
 if (historyElements.toggleHistoryBtn) {
-    historyElements.toggleHistoryBtn.addEventListener('click', () => toggleHistoryDrawer());
+    historyElements.toggleHistoryBtn.addEventListener('click', () => toggleHistoryOverlay());
 }
 
 if (historyElements.closeHistory) {
-    historyElements.closeHistory.addEventListener('click', () => toggleHistoryDrawer(false));
+    historyElements.closeHistory.addEventListener('click', () => toggleHistoryOverlay(false));
 }
 
 if (historyElements.historyBackdrop) {
-    historyElements.historyBackdrop.addEventListener('click', () => toggleHistoryDrawer(false));
+    historyElements.historyBackdrop.addEventListener('click', () => toggleHistoryOverlay(false));
 }
 
 document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && historyElements.historyDrawer?.classList.contains('open')) {
-        toggleHistoryDrawer(false);
+    if (event.key === 'Escape' && historyElements.historyOverlay?.classList.contains('open')) {
+        toggleHistoryOverlay(false);
     }
 });
 

@@ -19,20 +19,16 @@
             </div>
             <div class="hero-copy">
                 <p class="hero-eyebrow">Simply Bastiaan · Local-first transcription</p>
-                <h1>Voxtral transcripts, minus the clutter.</h1>
-                <p>
-                    Drop a file, keep everything on-device, and let Voxtral quietly handle the rest.
-                    Inspired by simplybastiaan.com but tuned for a lighter workspace.
+                <h1>Need privacy proof? Every file stays on this device.</h1>
+                <p class="hero-body">
+                    Voxtral keeps recordings, processing, and transcripts on your hardware. Nothing leaves your
+                    machine—just drop a file and let the amber-guided UI walk you through the workflow.
                 </p>
-                <div class="hero-meta">
-                    <span class="meta-pill">Mistral Mini 3B</span>
-                    <span class="meta-pill">Audio &amp; video ready</span>
-                    <span class="meta-pill accent" id="deviceBadge">Running on <strong id="deviceName">{{ device_info.device_name or 'CPU' }}</strong></span>
+                <div class="hero-facts">
+                    <span class="fact-pill accent">Mistral Mini 3B</span>
+                    <span class="fact-pill">Audio &amp; video ready</span>
+                    <span class="fact-pill" id="deviceBadge">Running on <strong id="deviceName">{{ device_info.device_name or 'CPU' }}</strong></span>
                 </div>
-            </div>
-            <div class="hero-callout">
-                <p>Ready for upload</p>
-                <small>Max 500MB · English today</small>
             </div>
         </header>
 
@@ -152,7 +148,7 @@
                 <button class="btn-ghost" id="toggleHistory">
                     <span class="btn-icon">📚</span> View History
                 </button>
-                <span class="workspace-note">Need privacy proof? Every file stays on this device.</span>
+                <span class="workspace-note">Review previous runs without leaving your device.</span>
             </div>
         </main>
 
@@ -165,10 +161,10 @@
         </footer>
     </div>
 
-    <!-- History Drawer -->
-    <div class="history-drawer" id="historyDrawer">
+    <!-- History Overlay -->
+    <div class="history-overlay" id="historyOverlay" aria-hidden="true">
         <div class="history-backdrop" id="historyBackdrop"></div>
-        <section class="history-section" id="historySection">
+        <section class="history-panel" id="historySection">
             <div class="history-header">
                 <div>
                     <p class="eyebrow">Session memory</p>

@@ -273,3 +273,131 @@ class TestWebSocketEvents:
         # Trigger transcription (would need implementation)
         # For now, just verify the listener is set up
         assert socketio_client.is_connected()
+
+
+@pytest.mark.api
+class TestSystemMonitoringEndpoints:
+    """Test system monitoring and update endpoints"""
+
+    def test_memory_status(self, client):
+        """Test GET /api/system/memory returns memory information"""
+        response = client.get("/api/system/memory")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        # Verify system memory information
+        assert "system" in data
+        system = data["system"]
+        assert "total_gb" in system
+        assert "available_gb" in system
+        assert "used_gb" in system
+        assert "percent" in system
+        assert "status" in system
+
+        # Verify status is one of the expected values
+        assert system["status"] in ["normal", "warning", "critical"]
+
+        # Verify process memory information
+        assert "process" in data
+        process = data["process"]
+        assert "rss_mb" in process
+        assert "vms_mb" in process
+        assert "percent" in process
+
+        # Verify data types and ranges
+        assert isinstance(system["total_gb"], (int, float))
+        assert isinstance(system["percent"], (int, float))
+        assert 0 <= system["percent"] <= 100
+
+    def test_version_endpoint(self, client):
+        """Test GET /api/version returns current version"""
+        response = client.get("/api/version")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert "version" in data
+        assert "app_name" in data
+        assert data["app_name"] == "Voxtral Transcription"
+
+        # Verify version format (semantic versioning)
+        version = data["version"]
+        assert isinstance(version, str)
+        # Should match pattern like 1.0.0
+        parts = version.split(".")
+        assert len(parts) >= 2  # At least major.minor
+
+    @patch("update_checker.get_latest_release")
+    def test_updates_check_no_update(self, mock_get_latest, client):
+        """Test GET /api/updates/check when no update available"""
+        # Mock same version as current
+        mock_get_latest.return_value = {
+            "version": "1.0.0",
+            "name": "v1.0.0",
+            "body": "Initial release",
+            "published_at": "2024-01-01T00:00:00Z",
+            "html_url": "https://github.com/debrockb/transcribe-voxtral/releases/tag/v1.0.0",
+            "download_url": "https://github.com/debrockb/transcribe-voxtral/archive/v1.0.0.zip",
+        }
+
+        response = client.get("/api/updates/check")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert "update_available" in data
+        assert "current_version" in data
+        assert "latest_version" in data
+        assert data["update_available"] is False
+
+    @patch("update_checker.get_latest_release")
+    def test_updates_check_update_available(self, mock_get_latest, client):
+        """Test GET /api/updates/check when update is available"""
+        # Mock newer version
+        mock_get_latest.return_value = {
+            "version": "2.0.0",
+            "name": "v2.0.0 - Major Update",
+            "body": "# What's New\n- New features\n- Bug fixes",
+            "published_at": "2024-02-01T00:00:00Z",
+            "html_url": "https://github.com/debrockb/transcribe-voxtral/releases/tag/v2.0.0",
+            "download_url": "https://github.com/debrockb/transcribe-voxtral/archive/v2.0.0.zip",
+        }
+
+        response = client.get("/api/updates/check")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert data["update_available"] is True
+        assert data["latest_version"] == "2.0.0"
+        assert "release_name" in data
+        assert "release_notes" in data
+        assert "release_url" in data
+        assert "download_url" in data
+
+    @patch("update_checker.get_latest_release")
+    def test_updates_check_network_error(self, mock_get_latest, client):
+        """Test GET /api/updates/check when network error occurs"""
+        # Mock network failure
+        mock_get_latest.return_value = None
+
+        response = client.get("/api/updates/check")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert data["update_available"] is False
+        assert "error" in data
+        assert "current_version" in data
+
+
+@pytest.mark.api
+class TestMemoryWarningWebSocket:
+    """Test memory warning WebSocket events"""
+
+    def test_websocket_connection_supports_memory_warnings(self, socketio_client):
+        """Test WebSocket connection is established for memory warnings"""
+        # The memory_warning event is emitted by the server via background thread
+        # Testing the actual event requires integration testing
+        # Here we just verify the WebSocket connection is established
+        assert socketio_client.is_connected()
+
+        # Disconnect to verify cleanup
+        socketio_client.disconnect()
+        assert not socketio_client.is_connected()

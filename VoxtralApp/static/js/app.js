@@ -420,8 +420,11 @@ function showToast(message, type = 'info') {
 // History Management Functions
 
 const historyElements = {
+    historyDrawer: document.getElementById('historyDrawer'),
+    historyBackdrop: document.getElementById('historyBackdrop'),
     historySection: document.getElementById('historySection'),
     toggleHistoryBtn: document.getElementById('toggleHistory'),
+    closeHistory: document.getElementById('closeHistory'),
     tabTranscriptions: document.getElementById('tabTranscriptions'),
     tabUploads: document.getElementById('tabUploads'),
     transcriptionsTab: document.getElementById('transcriptionsTab'),
@@ -434,18 +437,37 @@ const historyElements = {
     deleteAllUploads: document.getElementById('deleteAllUploads')
 };
 
-// Toggle history section
-if (historyElements.toggleHistoryBtn) {
-    historyElements.toggleHistoryBtn.addEventListener('click', () => {
-        const isVisible = historyElements.historySection.style.display !== 'none';
-        historyElements.historySection.style.display = isVisible ? 'none' : 'block';
-        historyElements.toggleHistoryBtn.textContent = isVisible ? '📚 View History' : '📚 Hide History';
-
-        if (!isVisible) {
-            loadTranscriptions();
-        }
-    });
+function toggleHistoryDrawer(show) {
+    if (!historyElements.historyDrawer) return;
+    const shouldShow = typeof show === 'boolean' ? show : !historyElements.historyDrawer.classList.contains('open');
+    historyElements.historyDrawer.classList.toggle('open', shouldShow);
+    if (historyElements.toggleHistoryBtn) {
+        historyElements.toggleHistoryBtn.innerHTML = shouldShow
+            ? '<span class="btn-icon">📚</span> Hide History'
+            : '<span class="btn-icon">📚</span> View History';
+    }
+    if (shouldShow) {
+        loadTranscriptions();
+    }
 }
+
+if (historyElements.toggleHistoryBtn) {
+    historyElements.toggleHistoryBtn.addEventListener('click', () => toggleHistoryDrawer());
+}
+
+if (historyElements.closeHistory) {
+    historyElements.closeHistory.addEventListener('click', () => toggleHistoryDrawer(false));
+}
+
+if (historyElements.historyBackdrop) {
+    historyElements.historyBackdrop.addEventListener('click', () => toggleHistoryDrawer(false));
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && historyElements.historyDrawer?.classList.contains('open')) {
+        toggleHistoryDrawer(false);
+    }
+});
 
 // Tab switching
 if (historyElements.tabTranscriptions) {

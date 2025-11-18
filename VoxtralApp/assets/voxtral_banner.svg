@@ -1,29 +1,30 @@
 <svg width="1200" height="520" viewBox="0 0 1200 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Voxtral privacy banner</title>
-  <desc id="desc">Minimal banner highlighting Voxtral’s on-device privacy USPs.</desc>
+  <desc id="desc">Clean banner emphasizing Voxtral on-device privacy USPs.</desc>
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFF9EF"/>
-      <stop offset="55%" stop-color="#F5F2FF"/>
-      <stop offset="100%" stop-color="#EBF1FF"/>
+      <stop offset="55%" stop-color="#F6F3FF"/>
+      <stop offset="100%" stop-color="#EAF1FF"/>
     </linearGradient>
     <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#F4B36E" stop-opacity="0.85"/>
-      <stop offset="100%" stop-color="#C8B9FF" stop-opacity="0.8"/>
+      <stop offset="0%" stop-color="#F4B36E" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#CBB9FF" stop-opacity="0.75"/>
     </linearGradient>
   </defs>
   <rect width="1200" height="520" rx="44" fill="url(#bg)"/>
-  <g opacity="0.35">
-    <circle cx="180" cy="110" r="80" fill="#FFEBD4"/>
-    <circle cx="420" cy="70" r="55" fill="#FCE1B4"/>
-    <circle cx="1030" cy="420" r="130" fill="#E4E6FF"/>
+  <g opacity="0.3">
+    <circle cx="190" cy="120" r="80" fill="#FFEBD4"/>
+    <circle cx="420" cy="80" r="55" fill="#FDE2B3"/>
+    <circle cx="1030" cy="420" r="130" fill="#E3E6FF"/>
   </g>
-  <path d="M0 360 C200 340 300 400 520 380 C720 362 840 430 1040 400 C1110 390 1160 400 1200 410 L1200 520 L0 520 Z" fill="url(#wave)" opacity="0.45"/>
+  <path d="M0 360 C200 340 320 400 540 380 C740 362 860 430 1060 405 C1120 398 1170 405 1200 415 L1200 520 L0 520 Z" fill="url(#wave)" opacity="0.45"/>
   <g transform="translate(120 120)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844">
-    <text font-size="22" letter-spacing="0.25em" fill="#5D5C76">SIMPLY BASTIAAN · LOCAL-FIRST TRANSCRIPTION</text>
-    <text y="120" font-size="88" font-weight="700">Record. Transcribe. Save time.</text>
+    <text font-size="22" letter-spacing="0.24em" fill="#5D5C76">SIMPLY BASTIAAN · LOCAL-FIRST TRANSCRIPTION</text>
+    <text y="110" font-size="72" font-weight="700">Record. Transcribe.</text>
+    <text y="190" font-size="72" font-weight="700">Save time.</text>
   </g>
-  <g transform="translate(120 280)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844" font-size="30">
+  <g transform="translate(120 300)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844" font-size="30">
     <text>On-device application</text>
     <text x="360">Full data ownership</text>
     <text x="720">No cloud, ever</text>

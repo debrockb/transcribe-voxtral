@@ -328,6 +328,12 @@ class TestZipUpdater:
             assert "tasklist" in script_content
             assert ".UPDATE_FAILED" in script_content
             assert "Start Voxtral Web - Windows.bat" in script_content
+            # Verify retry logic for file lock handling
+            assert "DELETE_RETRY" in script_content
+            assert "RETRY_COUNT" in script_content
+            assert "Waiting for locks" in script_content
+            # Verify recovery instructions in UPDATE_FAILED
+            assert "TO RECOVER:" in script_content
 
     @patch("app.sys.platform", "darwin")
     @patch("app.check_for_updates")

@@ -45,4 +45,9 @@ echo.
 REM Start the Flask application
 %PYTHON_BIN% app.py
 
-pause
+REM Only pause if there was an error (allows update to proceed on clean exit)
+if errorlevel 1 (
+    echo.
+    echo Application exited with an error.
+    pause
+)

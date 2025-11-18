@@ -1229,6 +1229,10 @@ goto WAIT_LOOP
 echo Process exited after %WAIT_COUNT%s >> "%LOG_FILE%"
 echo Application closed
 
+REM Wait additional 5 seconds for Windows to release file locks
+echo Waiting for file locks to release... >> "%LOG_FILE%"
+timeout /t 5 /nobreak >nul
+
 REM Clean old backup
 if exist "%BACKUP_DIR%" rmdir /S /Q "%BACKUP_DIR%" 2>>"%LOG_FILE%"
 
@@ -1245,13 +1249,37 @@ if errorlevel 8 (
 )
 echo Backup complete >> "%LOG_FILE%"
 
-REM Delete current installation
+REM Delete current installation with retry logic
 echo Removing current...
+set /a RETRY_COUNT=0
+:DELETE_RETRY
 rmdir /S /Q "%INSTALL_ROOT%" 2>>"%LOG_FILE%"
 if exist "%INSTALL_ROOT%" (
-    echo ERROR: Could not delete >> "%LOG_FILE%"
+    set /a RETRY_COUNT+=1
+    if %RETRY_COUNT% LEQ 10 (
+        echo Retry %RETRY_COUNT%/10: Waiting for locks... >> "%LOG_FILE%"
+        timeout /t 2 /nobreak >nul
+        goto DELETE_RETRY
+    )
+    echo ERROR: Could not delete after 10 retries >> "%LOG_FILE%"
     echo Update failed: Could not delete current installation > "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
+    echo Windows file locks prevented deletion. >> "%FAILED_MARKER%"
+    echo Your new version is ready in: %BACKUP_DIR% >> "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
+    echo TO RECOVER: >> "%FAILED_MARKER%"
+    echo 1. Restart Windows to release all file locks >> "%FAILED_MARKER%"
+    echo 2. Delete this directory: %INSTALL_ROOT% >> "%FAILED_MARKER%"
+    echo 3. Rename to: %INSTALL_ROOT% >> "%FAILED_MARKER%"
+    echo    From: %BACKUP_DIR% >> "%FAILED_MARKER%"
+    echo 4. Run: Start Voxtral Web - Windows.bat >> "%FAILED_MARKER%"
+    echo. >> "%FAILED_MARKER%"
     echo Log: %LOG_FILE% >> "%FAILED_MARKER%"
+    echo.
+    echo ERROR: Could not delete current installation
+    echo.
+    echo Your new version is ready but file locks prevented installation.
+    echo Please see UPDATE_FAILED file for recovery instructions.
     pause
     exit /b 1
 )
@@ -1333,6 +1361,10 @@ done
 echo "Process exited after ${{WAIT_COUNT}}s" >> "$LOG_FILE"
 echo "Application closed"
 
+# Wait additional 3 seconds for file locks to release
+echo "Waiting for file locks to release..." >> "$LOG_FILE"
+sleep 3
+
 # Clean old backup
 [ -d "$BACKUP_DIR" ] && rm -rf "$BACKUP_DIR" 2>>"$LOG_FILE"
 
@@ -1350,13 +1382,39 @@ if [ $? -ne 0 ]; then
 fi
 echo "Backup complete" >> "$LOG_FILE"
 
-# Delete current installation
+# Delete current installation with retry logic
 echo "Removing current..."
-rm -rf "$INSTALL_ROOT" 2>>"$LOG_FILE"
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt 5 ]; do
+    rm -rf "$INSTALL_ROOT" 2>>"$LOG_FILE"
+    if [ ! -d "$INSTALL_ROOT" ]; then
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo "Retry $RETRY_COUNT/5: Waiting for locks..." >> "$LOG_FILE"
+    sleep 2
+done
+
 if [ -d "$INSTALL_ROOT" ]; then
-    echo "ERROR: Could not delete" >> "$LOG_FILE"
-    echo "Update failed: Could not delete current installation" > "$FAILED_MARKER"
-    echo "Log: $LOG_FILE" >> "$FAILED_MARKER"
+    echo "ERROR: Could not delete after 5 retries" >> "$LOG_FILE"
+    {{
+        echo "Update failed: Could not delete current installation"
+        echo ""
+        echo "File locks prevented deletion."
+        echo "Your new version is ready in: $BACKUP_DIR"
+        echo ""
+        echo "TO RECOVER:"
+        echo "1. Close all applications using Voxtral"
+        echo "2. Delete this directory: $INSTALL_ROOT"
+        echo "3. Rename to: $INSTALL_ROOT"
+        echo "   From: $BACKUP_DIR"
+        echo "4. Run: ./start_web.sh"
+        echo ""
+        echo "Log: $LOG_FILE"
+    }} > "$FAILED_MARKER"
+    echo ""
+    echo "ERROR: Could not delete current installation"
+    echo "Please see .UPDATE_FAILED file for recovery instructions."
     read -p "Press Enter to exit..."
     exit 1
 fi

@@ -1,0 +1,420 @@
+"""
+Voxtral Web Application
+Flask-based web interface for audio transcription using Voxtral AI
+Cross-platform compatible (Windows & macOS)
+"""
+
+import os
+from pathlib import Path
+import uuid
+import threading
+from datetime import datetime
+from flask import Flask, render_template, request, jsonify, send_file
+from flask_socketio import SocketIO, emit
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+import logging
+
+from transcription_engine import TranscriptionEngine
+
+# Configuration
+BASE_DIR = Path(__file__).parent
+UPLOAD_FOLDER = BASE_DIR / "uploads"
+OUTPUT_FOLDER = BASE_DIR / "transcriptions_voxtral_final"
+ALLOWED_EXTENSIONS = {'wav', 'mp3', 'flac', 'm4a', 'mp4', 'avi', 'mov'}
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB
+
+# Ensure directories exist (cross-platform)
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+OUTPUT_FOLDER.mkdir(exist_ok=True)
+
+# Initialize Flask app
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'voxtral-transcription-secret-key'
+app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+# Enable CORS and SocketIO
+CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Global storage for jobs and files
+jobs = {}  # {job_id: {status, progress, transcript, etc}}
+uploaded_files = {}  # {file_id: {filename, path, size, etc}}
+
+# Initialize transcription engine (loaded once at startup)
+transcription_engine = None
+
+
+def allowed_file(filename):
+    """Check if file extension is allowed."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def get_file_extension(filename):
+    """Get file extension in lowercase."""
+    return filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+
+
+def is_video_file(filename):
+    """Check if file is a video format."""
+    video_extensions = {'mp4', 'avi', 'mov', 'mkv'}
+    return get_file_extension(filename) in video_extensions
+
+
+def convert_video_to_audio(video_path, output_audio_path):
+    """
+    Convert video file to audio (WAV format).
+    Uses moviepy for cross-platform compatibility.
+    """
+    try:
+        from moviepy.editor import VideoFileClip
+
+        logger.info(f"Converting video to audio: {video_path}")
+        video = VideoFileClip(str(video_path))
+        video.audio.write_audiofile(str(output_audio_path), codec='pcm_s16le')
+        video.close()
+        logger.info(f"Video converted successfully: {output_audio_path}")
+        return True
+    except Exception as e:
+        logger.error(f"Video conversion error: {e}")
+        return False
+
+
+def progress_callback(job_id, data):
+    """Callback function for transcription progress updates."""
+    if job_id in jobs:
+        jobs[job_id].update(data)
+
+        # Emit progress via WebSocket
+        socketio.emit('transcription_progress', {
+            'job_id': job_id,
+            **data
+        })
+
+
+def transcribe_in_background(job_id, file_path, language, output_path):
+    """Background task for transcription."""
+    try:
+        # Create progress callback with job_id
+        def callback(data):
+            progress_callback(job_id, data)
+
+        # Update engine callback
+        global transcription_engine
+        transcription_engine.progress_callback = callback
+
+        # Start transcription
+        result = transcription_engine.transcribe_file(
+            input_audio_path=str(file_path),
+            output_text_path=str(output_path),
+            language=language
+        )
+
+        if result['status'] == 'success':
+            jobs[job_id].update({
+                'status': 'complete',
+                'transcript': result['transcript'],
+                'duration': result['duration_minutes'],
+                'word_count': result['word_count'],
+                'char_count': result['char_count'],
+                'completed_at': datetime.now().isoformat()
+            })
+
+            socketio.emit('transcription_complete', {
+                'job_id': job_id,
+                'transcript': result['transcript'],
+                'duration': result['duration_minutes'],
+                'word_count': result['word_count']
+            })
+        else:
+            jobs[job_id].update({
+                'status': 'error',
+                'error': result.get('error', 'Unknown error')
+            })
+
+            socketio.emit('transcription_error', {
+                'job_id': job_id,
+                'error': result.get('error', 'Unknown error')
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Transcription error for job {job_id}: {error_msg}")
+
+        jobs[job_id].update({
+            'status': 'error',
+            'error': error_msg
+        })
+
+        socketio.emit('transcription_error', {
+            'job_id': job_id,
+            'error': error_msg
+        })
+
+
+# Routes
+
+@app.route('/')
+def index():
+    """Serve the main application page."""
+    device_info = transcription_engine.get_device_info() if transcription_engine else {}
+    return render_template('index.html', device_info=device_info)
+
+
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': f'File type not supported. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'}), 400
+
+    try:
+        # Generate unique file ID
+        file_id = str(uuid.uuid4())
+        original_filename = secure_filename(file.filename)
+
+        # Save file with unique name (cross-platform path)
+        file_extension = get_file_extension(original_filename)
+        unique_filename = f"{file_id}.{file_extension}"
+        file_path = UPLOAD_FOLDER / unique_filename
+
+        file.save(str(file_path))
+        file_size = file_path.stat().st_size
+
+        # Store file metadata
+        uploaded_files[file_id] = {
+            'file_id': file_id,
+            'original_filename': original_filename,
+            'filename': unique_filename,
+            'path': str(file_path),
+            'size': file_size,
+            'size_mb': round(file_size / (1024 * 1024), 2),
+            'is_video': is_video_file(original_filename),
+            'uploaded_at': datetime.now().isoformat()
+        }
+
+        logger.info(f"File uploaded: {original_filename} ({file_size} bytes)")
+
+        return jsonify({
+            'status': 'success',
+            'file_id': file_id,
+            'filename': original_filename,
+            'size': file_size,
+            'size_mb': uploaded_files[file_id]['size_mb'],
+            'is_video': uploaded_files[file_id]['is_video']
+        })
+
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/transcribe', methods=['POST'])
+def start_transcription():
+    """Start transcription job."""
+    data = request.json
+    file_id = data.get('file_id')
+    language = data.get('language', 'en')
+
+    if not file_id or file_id not in uploaded_files:
+        return jsonify({'error': 'Invalid file ID'}), 400
+
+    try:
+        file_info = uploaded_files[file_id]
+        file_path = Path(file_info['path'])
+
+        # If video, convert to audio first
+        if file_info['is_video']:
+            audio_path = UPLOAD_FOLDER / f"{file_id}_audio.wav"
+
+            if not convert_video_to_audio(file_path, audio_path):
+                return jsonify({'error': 'Failed to convert video to audio'}), 500
+
+            # Update file path to converted audio
+            file_path = audio_path
+
+        # Generate job ID and output path
+        job_id = str(uuid.uuid4())
+        output_filename = f"{Path(file_info['original_filename']).stem}_transcription.txt"
+        output_path = OUTPUT_FOLDER / output_filename
+
+        # Create job entry
+        jobs[job_id] = {
+            'job_id': job_id,
+            'file_id': file_id,
+            'filename': file_info['original_filename'],
+            'language': language,
+            'status': 'queued',
+            'progress': 0,
+            'current_chunk': 0,
+            'total_chunks': 0,
+            'started_at': datetime.now().isoformat(),
+            'output_path': str(output_path)
+        }
+
+        # Start transcription in background thread
+        thread = threading.Thread(
+            target=transcribe_in_background,
+            args=(job_id, file_path, language, output_path)
+        )
+        thread.daemon = True
+        thread.start()
+
+        logger.info(f"Transcription job started: {job_id} for file {file_info['original_filename']}")
+
+        return jsonify({
+            'status': 'success',
+            'job_id': job_id,
+            'message': 'Transcription started'
+        })
+
+    except Exception as e:
+        logger.error(f"Transcription start error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/status/<job_id>', methods=['GET'])
+def get_status(job_id):
+    """Get transcription job status."""
+    if job_id not in jobs:
+        return jsonify({'error': 'Job not found'}), 404
+
+    return jsonify(jobs[job_id])
+
+
+@app.route('/api/transcript/<job_id>', methods=['GET'])
+def get_transcript(job_id):
+    """Get completed transcript."""
+    if job_id not in jobs:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = jobs[job_id]
+
+    if job['status'] != 'complete':
+        return jsonify({'error': 'Transcription not complete'}), 400
+
+    return jsonify({
+        'job_id': job_id,
+        'transcript': job.get('transcript', ''),
+        'filename': job.get('filename', ''),
+        'language': job.get('language', ''),
+        'duration': job.get('duration', 0),
+        'word_count': job.get('word_count', 0),
+        'char_count': job.get('char_count', 0)
+    })
+
+
+@app.route('/api/transcript/<job_id>/download', methods=['GET'])
+def download_transcript(job_id):
+    """Download transcript as text file."""
+    if job_id not in jobs:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = jobs[job_id]
+
+    if job['status'] != 'complete':
+        return jsonify({'error': 'Transcription not complete'}), 400
+
+    output_path = job.get('output_path')
+
+    if not output_path or not Path(output_path).exists():
+        return jsonify({'error': 'Transcript file not found'}), 404
+
+    return send_file(output_path, as_attachment=True)
+
+
+@app.route('/api/languages', methods=['GET'])
+def get_languages():
+    """Get list of supported languages."""
+    languages = [
+        {'code': 'en', 'name': 'English'},
+        {'code': 'fr', 'name': 'French'},
+        {'code': 'es', 'name': 'Spanish'},
+        {'code': 'de', 'name': 'German'},
+        {'code': 'it', 'name': 'Italian'},
+        {'code': 'pt', 'name': 'Portuguese'},
+        {'code': 'nl', 'name': 'Dutch'},
+        {'code': 'pl', 'name': 'Polish'},
+        {'code': 'ru', 'name': 'Russian'},
+        {'code': 'zh', 'name': 'Chinese'},
+        {'code': 'ja', 'name': 'Japanese'},
+        {'code': 'ko', 'name': 'Korean'},
+        {'code': 'ar', 'name': 'Arabic'},
+        {'code': 'hi', 'name': 'Hindi'},
+        {'code': 'tr', 'name': 'Turkish'},
+        {'code': 'sv', 'name': 'Swedish'},
+        {'code': 'da', 'name': 'Danish'},
+        {'code': 'no', 'name': 'Norwegian'},
+        {'code': 'fi', 'name': 'Finnish'},
+        {'code': 'cs', 'name': 'Czech'},
+        {'code': 'sk', 'name': 'Slovak'},
+        {'code': 'uk', 'name': 'Ukrainian'},
+        {'code': 'ro', 'name': 'Romanian'},
+        {'code': 'el', 'name': 'Greek'},
+        {'code': 'he', 'name': 'Hebrew'},
+        {'code': 'id', 'name': 'Indonesian'},
+        {'code': 'vi', 'name': 'Vietnamese'},
+        {'code': 'th', 'name': 'Thai'},
+        {'code': 'ms', 'name': 'Malay'},
+        {'code': 'ca', 'name': 'Catalan'},
+    ]
+    return jsonify(languages)
+
+
+@app.route('/api/device-info', methods=['GET'])
+def get_device_info():
+    """Get device information."""
+    if transcription_engine:
+        return jsonify(transcription_engine.get_device_info())
+    return jsonify({'error': 'Engine not initialized'}), 503
+
+
+# WebSocket events
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    logger.info('Client connected')
+    emit('connected', {'message': 'Connected to Voxtral server'})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    logger.info('Client disconnected')
+
+
+def initialize_engine():
+    """Initialize the transcription engine at startup."""
+    global transcription_engine
+    try:
+        logger.info("Initializing Voxtral transcription engine...")
+        transcription_engine = TranscriptionEngine()
+        logger.info("Engine initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize engine: {e}")
+        raise
+
+
+if __name__ == '__main__':
+    # Initialize engine before starting server
+    initialize_engine()
+
+    # Start Flask-SocketIO server
+    port = int(os.environ.get('PORT', 5000))
+    logger.info(f"Starting Voxtral Web Application on port {port}...")
+    logger.info(f"Access the application at: http://localhost:{port}")
+
+    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)

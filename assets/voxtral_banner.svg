@@ -1,0 +1,41 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Transcribe Voxtral</title>
+  <desc id="desc">Hero image for the Transcribe Voxtral Python tool highlighting fast multilingual audio transcription.</desc>
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090E24"/>
+      <stop offset="50%" stop-color="#131F4A"/>
+      <stop offset="100%" stop-color="#2C3F73"/>
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF7A18"/>
+      <stop offset="50%" stop-color="#FFB347"/>
+      <stop offset="100%" stop-color="#FFE29F"/>
+    </linearGradient>
+    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2EE7FF" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#0A89D8" stop-opacity="0.2"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bgGradient)" rx="24"/>
+  <g opacity="0.35" transform="translate(-60,-40)">
+    <circle cx="200" cy="120" r="90" fill="#FF9F68"/>
+    <circle cx="420" cy="80" r="60" fill="#FFD357"/>
+    <circle cx="1030" cy="520" r="110" fill="#1FC8E1"/>
+  </g>
+  <path d="M0 450 C180 420 220 500 420 470 C640 440 640 540 880 510 C1070 488 1100 560 1200 540 L1200 650 L0 650 Z" fill="url(#waveGradient)" opacity="0.7"/>
+  <g transform="translate(120 140)" fill="#F4F6FF" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+    <text font-size="56" font-weight="700" letter-spacing="0.04em">TRANSCRIBE VOXTRAL</text>
+    <text y="76" font-size="28" fill="#D6E4FF">Fast, multilingual audio-to-text powered by Mistral AI</text>
+  </g>
+  <g transform="translate(120 320)" fill="#FFFFFF" font-family="'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+    <text font-size="96" font-weight="600">Chunk. Transcribe. Deliver.</text>
+    <text y="140" font-size="28" fill="#C2D6FF">• Automatic chunking</text>
+    <text x="320" y="140" font-size="28" fill="#C2D6FF">• GPU aware</text>
+    <text x="560" y="140" font-size="28" fill="#C2D6FF">• Batch ready</text>
+  </g>
+  <g transform="translate(120 500)" font-family="'Space Mono', 'Fira Code', 'Courier New', monospace">
+    <rect width="540" height="66" rx="18" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)"/>
+    <text x="40" y="42" font-size="26" fill="#FDFEFF">$ python transcribe_voxtral.py</text>
+  </g>
+</svg>

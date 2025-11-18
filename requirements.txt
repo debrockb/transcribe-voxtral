@@ -1,0 +1,24 @@
+# For compatibility
+numpy<2.3
+
+# Core dependencies
+torch
+librosa
+soundfile
+accelerate
+mistral-common
+transformers
+
+# Web application dependencies
+Flask==3.0.0
+Flask-SocketIO==5.3.5
+Flask-CORS==4.0.0
+python-socketio==5.10.0
+python-engineio==4.8.0
+Werkzeug==3.0.1
+
+# Video conversion (optional - install if processing video files)
+# moviepy==1.0.3
+# Note: moviepy requires ffmpeg to be installed on the system
+# macOS: brew install ffmpeg
+# Windows: Download from ffmpeg.org or use: choco install ffmpeg

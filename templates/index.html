@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxtral Transcription - AI-Powered Audio Transcription</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <span class="icon">🎙️</span>
+                    Voxtral Transcription
+                </h1>
+                <div class="device-badge" id="deviceBadge">
+                    <span id="deviceName">{{ device_info.device_name or 'CPU' }}</span>
+                </div>
+            </div>
+            <p class="app-subtitle">AI-Powered Audio & Video Transcription</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- File Upload Section -->
+            <section class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.m4a,.mp4,.avi,.mov" hidden>
+                    <div class="upload-icon">📁</div>
+                    <h3>Drag & Drop Audio/Video File</h3>
+                    <p>or click to browse</p>
+                    <p class="file-types">Supported: MP3, M4A, MP4, WAV, FLAC, AVI, MOV</p>
+                    <p class="file-size-limit">Max file size: 500MB</p>
+                </div>
+
+                <!-- Selected File Info -->
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <div class="file-details">
+                        <span class="file-icon">📄</span>
+                        <div class="file-text">
+                            <div class="file-name" id="fileName">filename.mp3</div>
+                            <div class="file-meta">
+                                <span id="fileSize">0 MB</span>
+                                <span id="fileType"></span>
+                            </div>
+                        </div>
+                        <button class="btn-remove" id="removeFile" title="Remove file">✕</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Language & Controls Section -->
+            <section class="controls-section">
+                <div class="control-group">
+                    <label for="languageSelect">Transcription Language</label>
+                    <div class="select-wrapper">
+                        <select id="languageSelect">
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="transcribeBtn" disabled>
+                    Start Transcription
+                </button>
+            </section>
+
+            <!-- Progress Section -->
+            <section class="progress-section" id="progressSection" style="display: none;">
+                <div class="progress-header">
+                    <span class="progress-status" id="progressStatus">Ready</span>
+                    <span class="progress-percentage" id="progressPercentage">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div class="progress-details" id="progressDetails">
+                    Waiting to start...
+                </div>
+            </section>
+
+            <!-- Transcript Section -->
+            <section class="transcript-section" id="transcriptSection" style="display: none;">
+                <div class="transcript-header">
+                    <h3>Transcript</h3>
+                    <div class="transcript-actions">
+                        <button class="btn-secondary" id="copyBtn" title="Copy to clipboard">
+                            <span class="btn-icon">📋</span> Copy
+                        </button>
+                        <button class="btn-secondary" id="downloadBtn" title="Download as text file">
+                            <span class="btn-icon">💾</span> Download
+                        </button>
+                        <button class="btn-secondary" id="clearBtn" title="Clear transcript">
+                            <span class="btn-icon">🗑️</span> Clear
+                        </button>
+                    </div>
+                </div>
+                <div class="transcript-stats" id="transcriptStats">
+                    <span><strong>Words:</strong> <span id="wordCount">0</span></span>
+                    <span><strong>Characters:</strong> <span id="charCount">0</span></span>
+                    <span><strong>Duration:</strong> <span id="audioDuration">0:00</span></span>
+                </div>
+                <div class="transcript-content" id="transcriptContent">
+                    <div class="transcript-placeholder">
+                        Your transcription will appear here...
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>
+                Powered by <strong>Mistral AI Voxtral-Mini-3B</strong> |
+                Privacy-focused local processing |
+                <a href="https://github.com/debrockb/transcribe-voxtral" target="_blank">GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

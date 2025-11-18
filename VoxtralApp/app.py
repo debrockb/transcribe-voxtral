@@ -138,8 +138,17 @@ def progress_callback(job_id, data):
         socketio.emit("transcription_progress", {"job_id": job_id, **data})
 
 
-def transcribe_in_background(job_id, file_path, language, output_path):
-    """Background task for transcription."""
+def transcribe_in_background(job_id, file_path, language, output_path, cleanup_path=None):
+    """
+    Background task for transcription.
+
+    Args:
+        job_id: Unique job identifier
+        file_path: Path to audio file to transcribe
+        language: Language code
+        output_path: Path to write transcription
+        cleanup_path: Optional path to delete after transcription (e.g., converted video WAV file)
+    """
     try:
         # Create progress callback with job_id
         def callback(data):
@@ -186,6 +195,15 @@ def transcribe_in_background(job_id, file_path, language, output_path):
         jobs[job_id].update({"status": "error", "error": error_msg})
 
         socketio.emit("transcription_error", {"job_id": job_id, "error": error_msg})
+
+    finally:
+        # Clean up converted audio file if it was from video
+        if cleanup_path and Path(cleanup_path).exists():
+            try:
+                Path(cleanup_path).unlink()
+                logger.info(f"Cleaned up converted audio file: {cleanup_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up converted audio file {cleanup_path}: {e}")
 
 
 # Helper functions for consistent API responses
@@ -302,6 +320,8 @@ def get_model_status():
 @app.route("/api/model/initialize", methods=["POST"])
 def initialize_model():
     """Initialize model with selected version."""
+    global engine_loading
+
     if transcription_engine:
         return (
             jsonify({"status": "error", "message": "Model already loaded. Please reload the application to change models."}),
@@ -324,11 +344,16 @@ def initialize_model():
         return jsonify({"status": "error", "message": f"Invalid model version: {model_version}"}), 400
 
     try:
+        # Set flag BEFORE starting thread to prevent race condition
+        engine_loading = True
+
         # Initialize engine in background thread to not block the API
         def load_model():
             try:
                 initialize_engine(model_version)
             except Exception as e:
+                global engine_loading
+                engine_loading = False
                 logger.error(f"Failed to load model in background: {e}")
 
         thread = threading.Thread(target=load_model, daemon=False)
@@ -345,6 +370,7 @@ def initialize_model():
         )
 
     except Exception as e:
+        engine_loading = False
         return jsonify({"status": "error", "message": f"Failed to start model loading: {str(e)}"}), 500
 
 
@@ -473,6 +499,23 @@ def start_transcription():  # noqa: C901
         file_info = uploaded_files[file_id]
         file_path = Path(file_info["path"])
 
+        # Check if uploaded file still exists
+        if not file_path.exists():
+            # Clean up stale metadata
+            uploaded_files.pop(file_id, None)
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Uploaded file no longer exists. Please re-upload the file.",
+                    }
+                ),
+                404,
+            )
+
+        # Track cleanup path for video conversions
+        cleanup_path = None
+
         # If video, convert to audio first
         if file_info["is_video"]:
             audio_path = UPLOAD_FOLDER / f"{file_id}_audio.wav"
@@ -480,8 +523,9 @@ def start_transcription():  # noqa: C901
             if not convert_video_to_audio(file_path, audio_path):
                 return jsonify({"status": "error", "message": "Failed to convert video to audio"}), 500
 
-            # Update file path to converted audio
+            # Update file path to converted audio and mark for cleanup
             file_path = audio_path
+            cleanup_path = audio_path
 
         # Generate job ID and output path
         job_id = str(uuid.uuid4())
@@ -504,7 +548,9 @@ def start_transcription():  # noqa: C901
         }
 
         # Start transcription in background thread
-        thread = threading.Thread(target=transcribe_in_background, args=(job_id, file_path, language, output_path))
+        thread = threading.Thread(
+            target=transcribe_in_background, args=(job_id, file_path, language, output_path, cleanup_path)
+        )
         thread.daemon = True
         thread.start()
 
@@ -1631,11 +1677,16 @@ def initialize_engine(model_version=None):
 
         transcription_engine = MagicMock()
         transcription_engine.device = "cpu"
-        transcription_engine.transcribe_file = MagicMock(return_value=None)
+        # Return proper dict structure instead of None to prevent TypeError
+        transcription_engine.transcribe_file = MagicMock(
+            return_value={"status": "success", "text": "Mock transcription", "language": "en"}
+        )
         engine_loading = False
         return
 
     try:
+        # Note: engine_loading is already set to True before thread start in initialize_model()
+        # This line is kept for direct calls to initialize_engine() outside of the API route
         engine_loading = True
 
         # Get model configuration

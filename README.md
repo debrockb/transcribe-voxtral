@@ -118,7 +118,7 @@ python app.py
 
 Open your browser and navigate to:
 ```
-http://localhost:5000
+http://localhost:8000
 ```
 
 ### 4. Transcribe Your First File
@@ -168,7 +168,7 @@ cd transcribe-voxtral-main/VoxtralApp
 ./start_web.sh  # or start_web.bat on Windows
 ```
 
-Access at `http://localhost:5000`
+Access at `http://localhost:8000`
 
 **Features:**
 - Drag-and-drop file upload
@@ -525,7 +525,7 @@ The application uses semantic versioning (vMAJOR.MINOR.PATCH) and automatically 
 
 Check your version at startup or via the API:
 ```bash
-curl http://localhost:5000/api/version
+curl http://localhost:8000/api/version
 ```
 
 ### Automatic Update Checks
@@ -537,7 +537,7 @@ curl http://localhost:5000/api/version
 ### Manual Update Check
 
 ```bash
-curl http://localhost:5000/api/updates/check
+curl http://localhost:8000/api/updates/check
 ```
 
 ### Updating the Application

@@ -692,6 +692,35 @@ if (historyElements.refreshUploads) {
     historyElements.refreshUploads.addEventListener('click', loadUploads);
 }
 
+// Auto-shutdown server when browser window is closed
+let isUnloading = false;
+
+window.addEventListener('beforeunload', (e) => {
+    // Set flag to indicate we're unloading
+    isUnloading = true;
+
+    // Send shutdown request to server (synchronous to ensure it completes)
+    const shutdownServer = () => {
+        try {
+            // Use sendBeacon for reliable sending during page unload
+            const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
+            navigator.sendBeacon('/api/shutdown', blob);
+        } catch (error) {
+            // Fallback to synchronous XHR if sendBeacon fails
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/shutdown', false); // false = synchronous
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.send(JSON.stringify({}));
+            } catch (xhrError) {
+                console.error('Failed to send shutdown request:', xhrError);
+            }
+        }
+    };
+
+    shutdownServer();
+});
+
 // Initialize app when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

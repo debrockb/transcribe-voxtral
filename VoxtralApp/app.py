@@ -573,6 +573,31 @@ def delete_all_uploads():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route("/api/shutdown", methods=["POST"])
+def shutdown_server():
+    """Shutdown the Flask server gracefully."""
+    try:
+        logger.info("Shutdown request received from client")
+
+        # Function to shutdown after sending response
+        def shutdown():
+            import time
+            time.sleep(0.5)  # Give time for response to be sent
+            logger.info("Shutting down server...")
+            os._exit(0)  # Force exit the process
+
+        # Start shutdown in background thread
+        shutdown_thread = threading.Thread(target=shutdown)
+        shutdown_thread.daemon = True
+        shutdown_thread.start()
+
+        return jsonify({"status": "success", "message": "Server shutting down..."})
+
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # WebSocket events
 
 

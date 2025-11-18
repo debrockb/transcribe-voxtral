@@ -153,6 +153,7 @@ function connectWebSocket() {
     state.socket.on('transcription_error', handleTranscriptionError);
     state.socket.on('memory_warning', handleMemoryWarning);
     state.socket.on('model_loading', handleModelLoading);
+    state.socket.on('update_progress', handleUpdateProgress);
 
     state.socket.on('disconnect', () => {
         console.log('WebSocket disconnected');
@@ -536,6 +537,38 @@ async function installUpdate() {
             elements.installUpdateBtn.disabled = false;
             elements.installUpdateBtn.textContent = 'Update Now';
         }
+    }
+}
+
+/**
+ * Handle update progress from WebSocket
+ * Shows real-time progress of ZIP-based updates
+ */
+function handleUpdateProgress(data) {
+    console.log('Update progress:', data);
+
+    const { stage, message, progress } = data;
+
+    // Update button text with progress
+    const btn = elements.installUpdateBtn;
+    if (btn) {
+        btn.textContent = `${message} (${progress}%)`;
+    }
+
+    // Show progress toast based on stage
+    const stageMessages = {
+        checking: 'Checking for updates...',
+        downloading: 'Downloading update files...',
+        extracting: 'Extracting files...',
+        backing_up: 'Backing up your data...',
+        installing: 'Installing update...',
+        restoring: 'Restoring your data...',
+        dependencies: 'Updating dependencies...',
+        complete: 'Update complete!'
+    };
+
+    if (stageMessages[stage]) {
+        showToast(message, stage === 'complete' ? 'success' : 'info');
     }
 }
 

@@ -8,15 +8,19 @@ import gc
 import logging
 import os
 import secrets
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
 import psutil
+import requests
 from flask import Flask, jsonify, render_template, request, send_file, session
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -886,11 +890,181 @@ def check_updates():
         return jsonify({"update_available": False, "current_version": get_current_version(), "error": str(e)}), 500
 
 
+def perform_zip_update():
+    """
+    Perform ZIP-based update for non-git installations.
+
+    Returns:
+        tuple: (success: bool, message: str, data: dict)
+    """
+    try:
+        # Emit progress update
+        def emit_progress(stage, message, progress=0):
+            socketio.emit("update_progress", {"stage": stage, "message": message, "progress": progress})
+            logger.info(f"Update progress: {stage} - {message} ({progress}%)")
+
+        emit_progress("checking", "Checking for updates...", 5)
+
+        # Get update information
+        update_info = check_for_updates()
+        if not update_info.get("update_available"):
+            return False, "No update available", {}
+
+        download_url = update_info.get("download_url")
+        if not download_url:
+            return False, "Download URL not available", {}
+
+        emit_progress("downloading", "Downloading update...", 10)
+
+        # Create temporary working directory
+        temp_dir = BASE_DIR.parent / "updates" / f"temp_{uuid.uuid4().hex[:8]}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            # Download ZIP file with progress
+            zip_path = temp_dir / "update.zip"
+            logger.info(f"Downloading from {download_url} to {zip_path}")
+
+            response = requests.get(download_url, stream=True, timeout=300)
+            response.raise_for_status()
+
+            total_size = int(response.headers.get("content-length", 0))
+            downloaded = 0
+
+            with open(zip_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            progress = 10 + int((downloaded / total_size) * 40)  # 10-50%
+                            emit_progress("downloading", f"Downloading... {downloaded // 1024 // 1024}MB", progress)
+
+            emit_progress("extracting", "Extracting files...", 55)
+
+            # Extract ZIP
+            extract_dir = temp_dir / "extracted"
+            extract_dir.mkdir(exist_ok=True)
+
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+
+            # Find the extracted folder (GitHub creates a folder like "debrockb-transcribe-voxtral-<hash>")
+            extracted_folders = list(extract_dir.iterdir())
+            if not extracted_folders:
+                return False, "Extracted archive is empty", {}
+
+            source_folder = extracted_folders[0]
+            logger.info(f"Extracted to {source_folder}")
+
+            emit_progress("backing_up", "Backing up user data...", 60)
+
+            # Preserve user data
+            backup_dir = temp_dir / "backup"
+            backup_dir.mkdir(exist_ok=True)
+
+            # Backup config, recordings, uploads, outputs
+            user_data_paths = [
+                ("VoxtralApp/config.json", "config.json"),
+                ("VoxtralApp/uploads", "uploads"),
+                ("VoxtralApp/output", "output"),
+                ("VoxtralApp/recordings", "recordings"),
+            ]
+
+            for rel_path, backup_name in user_data_paths:
+                src = BASE_DIR.parent / rel_path
+                if src.exists():
+                    dst = backup_dir / backup_name
+                    if src.is_file():
+                        shutil.copy2(src, dst)
+                    else:
+                        shutil.copytree(src, dst, dirs_exist_ok=True)
+                    logger.info(f"Backed up {rel_path}")
+
+            emit_progress("installing", "Installing update...", 70)
+
+            # Atomically replace installation
+            install_root = BASE_DIR.parent
+            backup_root = install_root.parent / f"{install_root.name}-backup-{int(time.time())}"
+
+            # Rename current installation to backup
+            logger.info(f"Backing up current installation to {backup_root}")
+            shutil.move(str(install_root), str(backup_root))
+
+            try:
+                # Move new version into place
+                logger.info(f"Moving {source_folder} to {install_root}")
+                shutil.move(str(source_folder), str(install_root))
+
+                emit_progress("restoring", "Restoring user data...", 80)
+
+                # Restore user data
+                for rel_path, backup_name in user_data_paths:
+                    src = backup_dir / backup_name
+                    if src.exists():
+                        dst = BASE_DIR.parent / rel_path
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        if src.is_file():
+                            shutil.copy2(src, dst)
+                        else:
+                            shutil.copytree(src, dst, dirs_exist_ok=True)
+                        logger.info(f"Restored {rel_path}")
+
+                emit_progress("dependencies", "Updating dependencies...", 85)
+
+                # Update dependencies
+                requirements_file = BASE_DIR / "requirements.txt"
+                if requirements_file.exists():
+                    if sys.platform == "win32":
+                        pip_exe = BASE_DIR / "voxtral_env" / "Scripts" / "pip.exe"
+                    else:
+                        pip_exe = BASE_DIR / "voxtral_env" / "bin" / "pip"
+
+                    if pip_exe.exists():
+                        pip_result = subprocess.run(
+                            [str(pip_exe), "install", "-r", str(requirements_file), "--upgrade"],
+                            capture_output=True,
+                            text=True,
+                            timeout=300,
+                        )
+                        if pip_result.returncode != 0:
+                            logger.warning(f"Pip install warnings: {pip_result.stderr}")
+
+                emit_progress("complete", "Update complete!", 100)
+
+                # Clean up temp directory
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+                return True, f"Updated to version {update_info['latest_version']}", {"backup_path": str(backup_root)}
+
+            except Exception as e:
+                # Rollback: restore backup
+                logger.error(f"Update failed, rolling back: {e}")
+                if install_root.exists():
+                    shutil.rmtree(install_root, ignore_errors=True)
+                shutil.move(str(backup_root), str(install_root))
+                raise
+
+        finally:
+            # Clean up temp directory
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except requests.exceptions.RequestException as e:
+        return False, f"Download failed: {str(e)}", {}
+    except zipfile.BadZipFile:
+        return False, "Downloaded file is not a valid ZIP archive", {}
+    except Exception as e:
+        logger.error(f"ZIP update failed: {e}", exc_info=True)
+        return False, f"Update failed: {str(e)}", {}
+
+
 @app.route("/api/updates/install", methods=["POST"])
 def install_update():  # noqa: C901
     """
     Install available update from GitHub.
 
+    Supports both git-based and ZIP-based installations.
     SECURITY: Protected by custom header validation to prevent CSRF attacks.
     CORS alone doesn't protect against HTML form submissions from malicious sites.
     """
@@ -904,14 +1078,29 @@ def install_update():  # noqa: C901
         # Check if running from git repository
         git_dir = BASE_DIR.parent / ".git"
         if not git_dir.exists():
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": "Not a git repository. Please update manually by downloading the latest release.",
-                    }
-                ),
-                400,
+            # ZIP-based installation - use ZIP update mechanism
+            logger.info("Git repository not found, using ZIP-based update...")
+            success, message, data = perform_zip_update()
+
+            if not success:
+                return jsonify({"status": "error", "message": message}), 400
+
+            # Schedule restart after a brief delay
+            def restart_app():
+                time.sleep(2)  # Give time for response to be sent
+                logger.info("Restarting application...")
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
+            restart_thread = threading.Thread(target=restart_app, daemon=True)
+            restart_thread.start()
+
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": f"{message} Application will restart in 2 seconds...",
+                    "updated": True,
+                    **data,
+                }
             )
 
         # Determine pip executable based on platform

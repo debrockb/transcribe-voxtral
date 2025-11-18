@@ -645,6 +645,9 @@ async function uploadFile(file) {
 
         const response = await fetch('/api/upload', {
             method: 'POST',
+            headers: {
+                'X-Voxtral-Request': 'voxtral-web-ui'
+            },
             body: formData
         });
 
@@ -699,7 +702,8 @@ async function startTranscription() {
         const response = await fetch('/api/transcribe', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Voxtral-Request': 'voxtral-web-ui'
             },
             body: JSON.stringify({
                 file_id: state.uploadedFile.file_id,

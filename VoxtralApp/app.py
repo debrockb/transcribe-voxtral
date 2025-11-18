@@ -350,7 +350,15 @@ def initialize_model():
 
 @app.route("/api/upload", methods=["POST"])
 def upload_file():
-    """Handle file upload."""
+    """
+    Handle file upload.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks and resource abuse.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     if "file" not in request.files:
         return jsonify({"status": "error", "message": "No file provided"}), 400
 
@@ -411,7 +419,15 @@ def upload_file():
 
 @app.route("/api/transcribe", methods=["POST"])
 def start_transcription():  # noqa: C901
-    """Start transcription job."""
+    """
+    Start transcription job.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks and resource abuse.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
     # Check if transcription engine is initialized
     if transcription_engine is None:
         return (
@@ -967,12 +983,13 @@ def perform_zip_update():
             backup_dir = temp_dir / "backup"
             backup_dir.mkdir(exist_ok=True)
 
-            # Backup config, recordings, uploads, outputs
+            # Backup config, recordings, uploads, outputs, and transcriptions
             user_data_paths = [
                 ("VoxtralApp/config.json", "config.json"),
                 ("VoxtralApp/uploads", "uploads"),
                 ("VoxtralApp/output", "output"),
                 ("VoxtralApp/recordings", "recordings"),
+                ("VoxtralApp/transcriptions_voxtral_final", "transcriptions"),  # CRITICAL: actual transcription storage
             ]
 
             for rel_path, backup_name in user_data_paths:
@@ -1304,4 +1321,9 @@ if __name__ == "__main__":
     logger.info(f"Access the application at: http://localhost:{port}")
     logger.info("Model will be loaded after user selection in the web UI")
 
-    socketio.run(app, host="0.0.0.0", port=port, debug=True, allow_unsafe_werkzeug=True)
+    # SECURITY: Bind to 127.0.0.1 (localhost) instead of 0.0.0.0 to prevent network access
+    # This ensures only the local machine can access the server, preventing:
+    # - Remote code execution via /api/updates/install
+    # - Data exfiltration via /api/history endpoints
+    # - Unauthorized access to transcripts and uploads
+    socketio.run(app, host="127.0.0.1", port=port, debug=True, allow_unsafe_werkzeug=True)

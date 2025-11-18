@@ -13,6 +13,34 @@
 </head>
 <body>
     <div class="app-shell">
+        <!-- System Banners -->
+        <!-- Memory Warning Banner -->
+        <div class="system-banner banner-warning" id="memoryBanner" style="display: none;">
+            <div class="banner-content">
+                <div class="banner-icon">⚠️</div>
+                <div class="banner-text">
+                    <strong id="memoryBannerTitle">High Memory Usage</strong>
+                    <span id="memoryBannerMessage">Your system memory is running high.</span>
+                </div>
+                <button class="banner-close" id="closeMemoryBanner" aria-label="Dismiss warning">✕</button>
+            </div>
+        </div>
+
+        <!-- Update Available Banner -->
+        <div class="system-banner banner-update" id="updateBanner" style="display: none;">
+            <div class="banner-content">
+                <div class="banner-icon">🎉</div>
+                <div class="banner-text">
+                    <strong>Update Available</strong>
+                    <span id="updateBannerMessage">A new version is available.</span>
+                </div>
+                <div class="banner-actions">
+                    <a class="banner-btn" id="viewReleaseBtn" href="#" target="_blank" rel="noopener noreferrer">View Release</a>
+                    <button class="banner-close" id="closeUpdateBanner" aria-label="Dismiss">✕</button>
+                </div>
+            </div>
+        </div>
+
         <header class="hero">
             <div class="hero-icon">
                 <img src="{{ url_for('static', filename='img/voxtral-icon.svg') }}" alt="Voxtral icon">

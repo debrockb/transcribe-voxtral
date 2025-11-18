@@ -35,7 +35,16 @@ const elements = {
     copyBtn: document.getElementById('copyBtn'),
     downloadBtn: document.getElementById('downloadBtn'),
     clearBtn: document.getElementById('clearBtn'),
-    toast: document.getElementById('toast')
+    toast: document.getElementById('toast'),
+    // System banners
+    memoryBanner: document.getElementById('memoryBanner'),
+    memoryBannerTitle: document.getElementById('memoryBannerTitle'),
+    memoryBannerMessage: document.getElementById('memoryBannerMessage'),
+    closeMemoryBanner: document.getElementById('closeMemoryBanner'),
+    updateBanner: document.getElementById('updateBanner'),
+    updateBannerMessage: document.getElementById('updateBannerMessage'),
+    viewReleaseBtn: document.getElementById('viewReleaseBtn'),
+    closeUpdateBanner: document.getElementById('closeUpdateBanner')
 };
 
 // Initialize application
@@ -43,6 +52,8 @@ function init() {
     setupEventListeners();
     loadLanguages();
     connectWebSocket();
+    startMemoryMonitoring();
+    checkForUpdates();
 }
 
 // Setup all event listeners
@@ -64,6 +75,18 @@ function setupEventListeners() {
     elements.copyBtn.addEventListener('click', copyTranscript);
     elements.downloadBtn.addEventListener('click', downloadTranscript);
     elements.clearBtn.addEventListener('click', clearTranscript);
+
+    // System banners
+    if (elements.closeMemoryBanner) {
+        elements.closeMemoryBanner.addEventListener('click', () => {
+            elements.memoryBanner.style.display = 'none';
+        });
+    }
+    if (elements.closeUpdateBanner) {
+        elements.closeUpdateBanner.addEventListener('click', () => {
+            elements.updateBanner.style.display = 'none';
+        });
+    }
 }
 
 // Load supported languages
@@ -98,10 +121,127 @@ function connectWebSocket() {
     state.socket.on('transcription_progress', handleProgressUpdate);
     state.socket.on('transcription_complete', handleTranscriptionComplete);
     state.socket.on('transcription_error', handleTranscriptionError);
+    state.socket.on('memory_warning', handleMemoryWarning);
 
     state.socket.on('disconnect', () => {
         console.log('WebSocket disconnected');
     });
+}
+
+// Memory Monitoring Functions
+
+/**
+ * Start periodic memory monitoring
+ */
+function startMemoryMonitoring() {
+    // Check memory immediately
+    checkMemoryStatus();
+
+    // Check every 15 seconds
+    setInterval(checkMemoryStatus, 15000);
+}
+
+/**
+ * Check current memory status via API
+ */
+async function checkMemoryStatus() {
+    try {
+        const response = await fetch('/api/system/memory');
+        const data = await response.json();
+
+        if (response.ok) {
+            updateMemoryBanner(data);
+        }
+    } catch (error) {
+        console.error('Failed to check memory status:', error);
+    }
+}
+
+/**
+ * Handle real-time memory warning from WebSocket
+ */
+function handleMemoryWarning(data) {
+    console.log('Memory warning received:', data);
+
+    const isCritical = data.level === 'critical';
+    const title = isCritical ? 'Critical Memory Usage' : 'High Memory Usage';
+    const message = data.message || `Memory usage is at ${data.percent}%`;
+
+    // Update banner
+    elements.memoryBannerTitle.textContent = title;
+    elements.memoryBannerMessage.textContent = message;
+
+    // Add/remove critical class
+    if (isCritical) {
+        elements.memoryBanner.classList.add('critical');
+    } else {
+        elements.memoryBanner.classList.remove('critical');
+    }
+
+    // Show banner
+    elements.memoryBanner.style.display = 'block';
+}
+
+/**
+ * Update memory banner based on current status
+ */
+function updateMemoryBanner(memoryData) {
+    const status = memoryData.system.status;
+    const percent = memoryData.system.percent;
+    const availableGB = memoryData.system.available_gb;
+
+    if (status === 'normal') {
+        // Hide banner if memory is normal
+        elements.memoryBanner.style.display = 'none';
+    } else if (status === 'warning' || status === 'critical') {
+        const isCritical = status === 'critical';
+        const title = isCritical ? 'Critical Memory Usage' : 'High Memory Usage';
+        const message = isCritical
+            ? `Memory usage is very high (${percent}%). Consider stopping transcription to prevent system slowdown.`
+            : `Memory usage is high (${percent}%). Available: ${availableGB} GB`;
+
+        elements.memoryBannerTitle.textContent = title;
+        elements.memoryBannerMessage.textContent = message;
+
+        if (isCritical) {
+            elements.memoryBanner.classList.add('critical');
+        } else {
+            elements.memoryBanner.classList.remove('critical');
+        }
+
+        elements.memoryBanner.style.display = 'block';
+    }
+}
+
+// Update Checking Functions
+
+/**
+ * Check for application updates
+ */
+async function checkForUpdates() {
+    try {
+        const response = await fetch('/api/updates/check');
+        const data = await response.json();
+
+        if (response.ok && data.update_available) {
+            showUpdateBanner(data);
+        }
+    } catch (error) {
+        console.error('Failed to check for updates:', error);
+    }
+}
+
+/**
+ * Show update available banner
+ */
+function showUpdateBanner(updateData) {
+    const message = `Version ${updateData.latest_version} is available (current: ${updateData.current_version})`;
+
+    elements.updateBannerMessage.textContent = message;
+    elements.viewReleaseBtn.href = updateData.release_url || '#';
+    elements.updateBanner.style.display = 'block';
+
+    console.log('Update available:', updateData);
 }
 
 // Handle file selection

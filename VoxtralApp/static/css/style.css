@@ -538,6 +538,112 @@ body {
     color: #000;
 }
 
+/* System Banners */
+.system-banner {
+    padding: 16px 20px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    border: 1px solid;
+    animation: slideDown 0.4s ease-out;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.banner-warning {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-color: #fbbf24;
+    color: #78350f;
+}
+
+.banner-warning.critical {
+    background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+    border-color: #ef4444;
+    color: #7f1d1d;
+}
+
+.banner-update {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    border-color: #10b981;
+    color: #064e3b;
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.banner-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.banner-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.banner-text strong {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.banner-text span {
+    font-size: 0.88rem;
+    opacity: 0.9;
+}
+
+.banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.banner-btn {
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.15);
+    color: inherit;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: background 0.2s ease;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.banner-btn:hover {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.banner-close {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    padding: 4px 8px;
+    line-height: 1;
+    color: inherit;
+}
+
+.banner-close:hover {
+    opacity: 1;
+}
+
 /* Footer */
 .footer {
     text-align: center;

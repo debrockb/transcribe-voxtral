@@ -4,6 +4,7 @@ Refactored version of transcribe_voxtral.py for web application use
 Supports progress callbacks and is designed for cross-platform compatibility (Windows & macOS)
 """
 
+import gc
 import logging
 import os
 import tempfile
@@ -13,6 +14,7 @@ from typing import Callable, Dict, Optional
 
 import librosa
 import numpy as np
+import psutil
 import soundfile as sf
 import torch
 from transformers import AutoProcessor, VoxtralForConditionalGeneration
@@ -101,6 +103,47 @@ class TranscriptionEngine:
             except Exception as e:
                 logger.warning(f"Progress callback error: {e}")
 
+    def _get_optimal_chunk_duration(self, default_duration: int = 120) -> int:
+        """
+        Calculate optimal chunk duration based on available system memory.
+
+        Args:
+            default_duration: Default chunk duration in seconds (2 minutes)
+
+        Returns:
+            Adjusted chunk duration in seconds
+        """
+        try:
+            memory = psutil.virtual_memory()
+            available_gb = memory.available / (1024**3)
+
+            # If memory is critically low (< 2GB available), use shorter chunks
+            if available_gb < 2:
+                logger.warning(f"Low memory detected ({available_gb:.2f}GB available), using 60s chunks")
+                return 60  # 1 minute chunks
+            # If memory is low (< 4GB available), use medium chunks
+            elif available_gb < 4:
+                logger.info(f"Limited memory detected ({available_gb:.2f}GB available), using 90s chunks")
+                return 90  # 1.5 minute chunks
+            else:
+                # Normal memory available, use default
+                return default_duration
+
+        except Exception as e:
+            logger.warning(f"Could not detect memory, using default chunk duration: {e}")
+            return default_duration
+
+    def _cleanup_memory(self):
+        """Force garbage collection and clear device caches."""
+        # Force Python garbage collection
+        gc.collect()
+
+        # Clear device-specific caches
+        if self.device == "mps":
+            torch.mps.empty_cache()
+        elif self.device == "cuda":
+            torch.cuda.empty_cache()
+
     def _transcribe_chunk(self, temp_chunk_path: str, language: str) -> str:
         """
         Transcribe a single audio chunk.
@@ -159,7 +202,11 @@ class TranscriptionEngine:
 
             logger.info(f"Audio loaded. Duration: {total_duration_s / 60:.2f} minutes")
 
-            chunk_len = chunk_duration_s * sample_rate
+            # Adjust chunk duration based on available memory
+            optimal_chunk_duration = self._get_optimal_chunk_duration(chunk_duration_s)
+            if optimal_chunk_duration != chunk_duration_s:
+                logger.info(f"Chunk duration adjusted from {chunk_duration_s}s to {optimal_chunk_duration}s for memory optimization")
+            chunk_len = optimal_chunk_duration * sample_rate
             all_transcriptions = []
             num_chunks = int(np.ceil(len(waveform) / chunk_len))
 
@@ -210,9 +257,8 @@ class TranscriptionEngine:
                     if os.path.exists(temp_chunk_path):
                         os.remove(temp_chunk_path)
 
-                    # Clear cache on MPS devices
-                    if self.device == "mps":
-                        torch.mps.empty_cache()
+                    # Clean up memory after each chunk to prevent accumulation
+                    self._cleanup_memory()
 
             # Combine all transcriptions
             self._emit_progress({"status": "finalizing", "message": "Combining transcriptions...", "progress": 95})

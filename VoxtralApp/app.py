@@ -4,19 +4,23 @@ Flask-based web interface for audio transcription using Voxtral AI
 Cross-platform compatible (Windows & macOS)
 """
 
+import gc
 import logging
 import os
 import threading
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 
+import psutil
 from flask import Flask, jsonify, render_template, request, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 
 from transcription_engine import TranscriptionEngine
+from update_checker import check_for_updates, get_current_version
 
 # Configuration
 BASE_DIR = Path(__file__).parent
@@ -599,6 +603,70 @@ def shutdown_server():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route("/api/system/memory", methods=["GET"])
+def get_memory_status():
+    """Get current system and process memory usage."""
+    try:
+        # System memory
+        system_memory = psutil.virtual_memory()
+
+        # Process memory (this Flask app)
+        process = psutil.Process()
+        process_memory = process.memory_info()
+
+        # Determine status level
+        percent = system_memory.percent
+        if percent >= 90:
+            status = "critical"
+        elif percent >= 80:
+            status = "warning"
+        else:
+            status = "normal"
+
+        return jsonify({
+            "system": {
+                "total_gb": round(system_memory.total / (1024**3), 2),
+                "available_gb": round(system_memory.available / (1024**3), 2),
+                "used_gb": round(system_memory.used / (1024**3), 2),
+                "percent": round(percent, 1),
+                "status": status
+            },
+            "process": {
+                "rss_mb": round(process_memory.rss / (1024**2), 2),
+                "vms_mb": round(process_memory.vms / (1024**2), 2),
+                "percent": round(process.memory_percent(), 2)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting memory status: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/version", methods=["GET"])
+def get_version():
+    """Get current application version."""
+    return jsonify({
+        "version": get_current_version(),
+        "app_name": "Voxtral Transcription"
+    })
+
+
+@app.route("/api/updates/check", methods=["GET"])
+def check_updates():
+    """Check for available updates from GitHub."""
+    try:
+        update_info = check_for_updates()
+        return jsonify(update_info)
+    except Exception as e:
+        logger.error(f"Error checking for updates: {e}")
+        return jsonify({
+            "update_available": False,
+            "current_version": get_current_version(),
+            "error": str(e)
+        }), 500
+
+
 # WebSocket events
 
 
@@ -613,6 +681,45 @@ def handle_connect():
 def handle_disconnect():
     """Handle client disconnection."""
     logger.info("Client disconnected")
+
+
+def start_memory_monitor():
+    """Start background thread to monitor memory and emit warnings via WebSocket."""
+
+    def monitor():
+        """Background memory monitoring loop."""
+        while True:
+            try:
+                memory = psutil.virtual_memory()
+                percent = memory.percent
+
+                if percent >= 80:
+                    level = "critical" if percent >= 90 else "warning"
+                    message = (
+                        f"CRITICAL: Memory usage is very high ({percent}%). "
+                        "Consider stopping transcription to prevent system slowdown."
+                        if percent >= 90
+                        else f"WARNING: Memory usage is high ({percent}%). Transcription may slow down."
+                    )
+
+                    socketio.emit(
+                        "memory_warning",
+                        {
+                            "level": level,
+                            "percent": round(percent, 1),
+                            "available_gb": round(memory.available / (1024**3), 2),
+                            "message": message,
+                        },
+                    )
+
+                time.sleep(10)  # Check every 10 seconds
+            except Exception as e:
+                logger.error(f"Error in memory monitor: {e}")
+                time.sleep(30)  # Wait longer if error occurs
+
+    thread = threading.Thread(target=monitor, daemon=True)
+    thread.start()
+    logger.info("Memory monitoring started")
 
 
 def initialize_engine():

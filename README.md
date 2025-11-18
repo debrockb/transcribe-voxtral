@@ -25,6 +25,8 @@ A Flask-based web application for transcribing audio and video files using the M
 - 🔒 **Privacy-Focused** - All processing on local hardware, no cloud uploads
 - 💰 **No API Costs** - Completely free to use
 - ⚙️ **Efficient Memory** - Smart chunking prevents memory overflow
+- 📊 **Memory Monitoring** - Real-time RAM usage warnings to prevent system slowdown
+- 🔄 **Auto-Updates** - Automatic update notifications from GitHub releases
 
 ## Architecture
 
@@ -221,12 +223,16 @@ The Flask application provides a REST API and WebSocket interface for programmat
 - `GET /api/transcript/<job_id>/download` - Download as file
 - `GET /api/languages` - Get supported languages
 - `GET /api/device-info` - Get device information
+- `GET /api/system/memory` - Get current memory usage and status
+- `GET /api/version` - Get current application version
+- `GET /api/updates/check` - Check for available updates from GitHub
 
 ### WebSocket Events
 
 - `transcription_progress` - Real-time progress updates
 - `transcription_complete` - Completion notification
 - `transcription_error` - Error notifications
+- `memory_warning` - Real-time memory usage warnings (80%+ RAM)
 
 For complete API reference, see [VoxtralApp/docs/API_DOCUMENTATION.md](VoxtralApp/docs/API_DOCUMENTATION.md)
 
@@ -478,6 +484,82 @@ See [requirements.txt](VoxtralApp/requirements.txt) and [requirements-dev.txt](V
 4. **Adequate Storage** - Ensure 20GB+ free for model + files
 5. **Monitor Progress** - Watch first transcription to verify quality
 6. **Save Transcripts** - Download/copy before closing browser
+
+## Memory Monitoring & System Health
+
+The application includes intelligent memory monitoring to prevent system slowdown:
+
+### Memory Warning Levels
+
+- **Normal (< 80% RAM)** - No warnings, optimal performance
+- **Warning (80-90% RAM)** - Yellow banner appears, transcription continues
+- **Critical (> 90% RAM)** - Red banner appears, consider stopping transcription
+
+### Automatic Optimizations
+
+The transcription engine automatically adjusts based on available memory:
+- **< 2GB available** - Uses 60-second chunks (reduced memory footprint)
+- **2-4GB available** - Uses 90-second chunks (balanced performance)
+- **> 4GB available** - Uses 120-second chunks (optimal performance)
+
+### Memory Management Features
+
+- **Real-time Monitoring** - Memory status checked every 15 seconds
+- **WebSocket Alerts** - Instant warnings when RAM usage exceeds thresholds
+- **Automatic Cleanup** - Garbage collection after each audio chunk
+- **Device Cache Clearing** - MPS/CUDA caches cleared between chunks
+- **Visual Banners** - Clear on-screen warnings with RAM percentage
+
+### Best Practices for Large Files
+
+1. **Close Other Applications** - Free up RAM before transcribing
+2. **Monitor Banners** - Watch for memory warnings during processing
+3. **Restart if Needed** - Stop transcription if critical warning appears
+4. **Chunk Size** - System automatically adjusts based on available RAM
+
+## Versioning & Updates
+
+The application uses semantic versioning (vMAJOR.MINOR.PATCH) and automatically checks for updates.
+
+### Current Version
+
+Check your version at startup or via the API:
+```bash
+curl http://localhost:5000/api/version
+```
+
+### Automatic Update Checks
+
+- **On Startup** - Checks GitHub for new releases when app starts
+- **Update Banner** - Green notification appears when new version available
+- **Release Information** - Click "View Release" to see changelog and download
+
+### Manual Update Check
+
+```bash
+curl http://localhost:5000/api/updates/check
+```
+
+### Updating the Application
+
+When a new version is available:
+
+1. **View Release Notes** - Click the banner link to see what's new
+2. **Download Update** - Download from GitHub releases page
+3. **Stop Application** - Close the web interface (server auto-shuts down)
+4. **Replace Files** - Extract new version over existing installation
+5. **Restart** - Launch application normally
+
+### Version File
+
+The current version is stored in:
+```
+VoxtralApp/VERSION
+```
+
+### GitHub Releases
+
+All releases are published at: `https://github.com/debrockb/transcribe-voxtral/releases`
 
 ## License
 

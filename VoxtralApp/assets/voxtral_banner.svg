@@ -1,32 +1,146 @@
-<svg width="1200" height="520" viewBox="0 0 1200 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Voxtral privacy banner</title>
-  <desc id="desc">Clean banner emphasizing Voxtral on-device privacy USPs.</desc>
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFF9EF"/>
-      <stop offset="55%" stop-color="#F6F3FF"/>
-      <stop offset="100%" stop-color="#EAF1FF"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1200"
+   height="560"
+   viewBox="0 0 1200 560"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   id="svg12"
+   sodipodi:docname="voxtral_banner.svg"
+   inkscape:version="1.4.2 (ebf0e940, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview12"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.1254098"
+     inkscape:cx="594.45015"
+     inkscape:cy="398.07723"
+     inkscape:window-width="2160"
+     inkscape:window-height="1097"
+     inkscape:window-x="0"
+     inkscape:window-y="82"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="g9" />
+  <title
+     id="title">Voxtral privacy banner</title>
+  <desc
+     id="desc">Clean banner emphasizing Voxtral on-device privacy USPs.</desc>
+  <defs
+     id="defs5">
+    <linearGradient
+       id="bg"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#FFF9EF"
+         id="stop1" />
+      <stop
+         offset="55%"
+         stop-color="#F6F3FF"
+         id="stop2" />
+      <stop
+         offset="100%"
+         stop-color="#EAF1FF"
+         id="stop3" />
     </linearGradient>
-    <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#F4B36E" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#CBB9FF" stop-opacity="0.75"/>
+    <linearGradient
+       id="wave"
+       x1="0%"
+       y1="0%"
+       x2="100%"
+       y2="0%">
+      <stop
+         offset="0%"
+         stop-color="#F4B36E"
+         stop-opacity="0.8"
+         id="stop4" />
+      <stop
+         offset="100%"
+         stop-color="#CBB9FF"
+         stop-opacity="0.75"
+         id="stop5" />
     </linearGradient>
   </defs>
-  <rect width="1200" height="520" rx="44" fill="url(#bg)"/>
-  <g opacity="0.3">
-    <circle cx="190" cy="120" r="80" fill="#FFEBD4"/>
-    <circle cx="420" cy="80" r="55" fill="#FDE2B3"/>
-    <circle cx="1030" cy="420" r="130" fill="#E3E6FF"/>
+  <rect
+     width="1200"
+     height="560"
+     rx="44"
+     fill="url(#bg)"
+     id="rect5" />
+  <g
+     opacity="0.3"
+     id="g7">
+    <circle
+       cx="190"
+       cy="120"
+       r="80"
+       fill="#FFEBD4"
+       id="circle5" />
+    <circle
+       cx="420"
+       cy="80"
+       r="55"
+       fill="#FDE2B3"
+       id="circle6" />
+    <circle
+       cx="1030"
+       cy="420"
+       r="130"
+       fill="#E3E6FF"
+       id="circle7" />
   </g>
-  <path d="M0 360 C200 340 320 400 540 380 C740 362 860 430 1060 405 C1120 398 1170 405 1200 415 L1200 520 L0 520 Z" fill="url(#wave)" opacity="0.45"/>
-  <g transform="translate(120 120)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844">
-    <text font-size="22" letter-spacing="0.24em" fill="#5D5C76">SIMPLY BASTIAAN · LOCAL-FIRST TRANSCRIPTION</text>
-    <text y="110" font-size="72" font-weight="700">Record. Transcribe.</text>
-    <text y="190" font-size="72" font-weight="700">Save time.</text>
+  <path
+     d="M0 400 C200 380 320 440 540 420 C740 402 860 470 1060 445 C1120 438 1170 445 1200 455 L1200 560 L0 560 Z"
+     fill="url(#wave)"
+     opacity="0.45"
+     id="path7" />
+  <g
+     transform="translate(120 120)"
+     font-family="'Inter','Segoe UI',sans-serif"
+     fill="#1A1844"
+     id="g9">
+    <text
+       font-size="22px"
+       letter-spacing="0.24em"
+       fill="#5d5c76"
+       id="text7">BY SIMPLY BASTIAAN: LOCAL TRANSCRIPTION</text>
+    <text
+       y="120"
+       font-size="78px"
+       font-weight="700"
+       id="text8">Record, transcribe,</text>
+    <text
+       y="215"
+       font-size="78px"
+       font-weight="700"
+       id="text9">save time.</text>
   </g>
-  <g transform="translate(120 300)" font-family="'Inter','Segoe UI',sans-serif" fill="#1A1844" font-size="30">
-    <text>On-device application</text>
-    <text x="360">Full data ownership</text>
-    <text x="720">No cloud, ever</text>
+  <g
+     transform="translate(123.55426,402.65113)"
+     font-family="Inter, 'Segoe UI', sans-serif"
+     fill="#1a1844"
+     font-size="30px"
+     id="g12">
+    <text
+       id="text10">On-device application</text>
+    <text
+       x="360"
+       id="text11">Full data ownership</text>
+    <text
+       x="720"
+       id="text12">No cloud</text>
   </g>
 </svg>

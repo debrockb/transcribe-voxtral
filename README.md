@@ -15,9 +15,11 @@ A Flask-based web application for transcribing audio and video files using the M
 
 ### Transcription
 - 🎵 **Audio & Video Support** - WAV, MP3, FLAC, M4A, MP4, AVI, MOV
-- 🎬 **Auto Video Conversion** - Automatically extracts audio from video files
+- 🎬 **FFmpeg Pre-Conversion** - Converts complex formats to clean PCM WAV for reliable processing
 - 🌍 **30+ Languages** - Multilingual support (English, French, Spanish, and more)
-- 🔄 **Chunked Processing** - Handles large files efficiently with 2-minute chunks
+- 🗣️ **Auto Language Detection** - Automatically detects language per chunk using SpeechBrain
+- 🔄 **Smart Chunking** - 90-second chunks optimized for multi-language content
+- 🎚️ **Audio Normalization** - Automatic volume normalization for better recognition
 - 🎯 **High Accuracy** - Powered by Mistral AI Voxtral-Mini-3B model
 
 ### Performance & Privacy
@@ -65,10 +67,12 @@ A Flask-based web application for transcribing audio and video files using the M
 - **RAM:** 8GB+ (16GB+ recommended for optimal performance)
 - **Internet:** Required for initial model download only
 
-### Optional
-- **FFmpeg** - For video conversion (MP4, AVI, MOV files)
+### Required
+
+- **FFmpeg** - For audio/video pre-conversion (ensures reliable processing)
   - macOS: `brew install ffmpeg`
-  - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+  - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html) or `choco install ffmpeg`
+  - Linux: `sudo apt install ffmpeg`
 
 ## Quick Start
 
@@ -453,12 +457,15 @@ flake8 . --config=.flake8
 
 ### Core
 - **torch** - Deep learning framework
+- **torchaudio** - Audio processing for PyTorch
 - **transformers** - HuggingFace model interface
-- **librosa** - Audio processing
+- **librosa** - Audio processing and normalization
 - **soundfile** - Audio file I/O
+- **speechbrain** - Automatic language detection
 - **Flask** - Web framework
 - **Flask-SocketIO** - Real-time WebSocket support
 - **mistral-common** - Mistral AI utilities
+- **psutil** - System memory monitoring
 
 ### Development
 - **pytest** - Testing framework

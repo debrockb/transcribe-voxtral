@@ -37,6 +37,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # Enable debug for language detection diagnostics
 
 # --- CONFIGURATION ---
 SUPPORTED_LANGS = {"en", "fr", "de", "es", "it", "nl", "pt", "hi", "pl", "ru", "ja", "ko", "zh", "ar"}
@@ -270,35 +271,69 @@ class TranscriptionEngine:
         if not self.lang_classifier:
             return last_detected_lang
 
+        waveform = None
+        resampler = None
         try:
             waveform, sr = torchaudio.load(audio_path)
 
             if sr != 16000:
                 resampler = torchaudio.transforms.Resample(sr, 16000)
                 waveform = resampler(waveform)
+                del resampler
+                resampler = None
 
             # Check if audio is too quiet (likely silence)
             if waveform.abs().mean() < 0.001:
+                del waveform
                 return last_detected_lang
 
             # Convert to mono if needed
             if waveform.shape[0] > 1:
                 waveform = waveform.mean(dim=0, keepdim=True)
 
-            _, _, _, text_lab = self.lang_classifier.classify_batch(waveform)
-            del waveform
+            # Run classifier with no_grad to prevent gradient accumulation
+            with torch.no_grad():
+                _, _, _, text_lab = self.lang_classifier.classify_batch(waveform)
 
-            detected_code = text_lab[0].split(':')[0].lower()
+            # Immediately free the waveform
+            del waveform
+            waveform = None
+
+            # Debug: log the raw output from classifier
+            raw_label = text_lab[0] if text_lab else "empty"
+            logger.debug(f"SpeechBrain raw output: '{raw_label}'")
+
+            # Parse the language code - format is typically "fr: French" or just "fr"
+            if ':' in raw_label:
+                detected_code = raw_label.split(':')[0].strip().lower()
+            else:
+                detected_code = raw_label.strip().lower()
+
+            logger.debug(f"Parsed language code: '{detected_code}'")
 
             # Only return if it's a supported language
             if detected_code not in SUPPORTED_LANGS:
+                logger.debug(f"Language '{detected_code}' not in SUPPORTED_LANGS, using fallback '{last_detected_lang}'")
                 return last_detected_lang
 
             return detected_code
 
         except Exception as e:
-            logger.debug(f"Language detection failed: {e}")
+            logger.warning(f"Language detection failed: {e}")
             return last_detected_lang
+
+        finally:
+            # Ensure cleanup even on exception
+            if waveform is not None:
+                del waveform
+            if resampler is not None:
+                del resampler
+            # Force garbage collection and clear device caches
+            gc.collect()
+            if torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+            elif torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def _emit_progress(self, data: Dict):
         """Emit progress update via callback if available."""
@@ -360,30 +395,43 @@ class TranscriptionEngine:
         Returns:
             Transcribed text
         """
-        inputs = self.processor.apply_transcription_request(
-            language=language, model_id=self.model_id, audio=temp_chunk_path, return_tensors="pt"
-        )
-
-        inputs = inputs.to(self.device, dtype=self.dtype)
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=2048,
-                num_beams=1,
-                do_sample=False
+        inputs = None
+        outputs = None
+        try:
+            inputs = self.processor.apply_transcription_request(
+                language=language, model_id=self.model_id, audio=temp_chunk_path, return_tensors="pt"
             )
 
-        transcription = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
+            inputs = inputs.to(self.device, dtype=self.dtype)
 
-        # Clean up language tags that may appear in output
-        for lang in SUPPORTED_LANGS:
-            transcription = transcription.replace(f"lang:{lang}", "")
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=2048,
+                    num_beams=1,
+                    do_sample=False
+                )
 
-        del inputs
-        del outputs
+            transcription = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
 
-        return transcription.strip()
+            # Clean up language tags that may appear in output
+            for lang in SUPPORTED_LANGS:
+                transcription = transcription.replace(f"lang:{lang}", "")
+
+            return transcription.strip()
+
+        finally:
+            # Aggressive cleanup of tensors
+            if inputs is not None:
+                del inputs
+            if outputs is not None:
+                del outputs
+            # Clear device caches immediately after model inference
+            gc.collect()
+            if self.device == "mps":
+                torch.mps.empty_cache()
+            elif self.device == "cuda":
+                torch.cuda.empty_cache()
 
     def transcribe_file(
         self,
@@ -470,6 +518,10 @@ class TranscriptionEngine:
             logger.info(f"Processing audio in {num_chunks} chunks...")
             current_lang = language  # Track current language for multi-lingual files
 
+            # Log initial memory state
+            mem_info = psutil.virtual_memory()
+            logger.info(f"Memory before processing: {mem_info.used / (1024**3):.2f}GB used / {mem_info.total / (1024**3):.2f}GB total")
+
             for i, start in enumerate(range(0, len(waveform), chunk_len)):
                 end = start + chunk_len
                 chunk_waveform = waveform[start:end]
@@ -485,6 +537,10 @@ class TranscriptionEngine:
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                     temp_chunk_path = tmp.name
                     sf.write(temp_chunk_path, chunk_waveform, sample_rate)
+
+                # CRITICAL: Free chunk_waveform immediately after writing to disk
+                del chunk_waveform
+                chunk_waveform = None
 
                 try:
                     chunk_num = i + 1
@@ -530,6 +586,10 @@ class TranscriptionEngine:
 
                     # Clean up memory after each chunk to prevent accumulation
                     self._cleanup_memory()
+
+                    # Log memory usage after each chunk
+                    mem_info = psutil.virtual_memory()
+                    logger.info(f"Memory after chunk {i + 1}: {mem_info.used / (1024**3):.2f}GB used ({mem_info.percent}%)")
 
             # Clean up full waveform to free memory
             del waveform

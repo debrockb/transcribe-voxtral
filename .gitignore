@@ -79,3 +79,5 @@ instance/
 *.avi
 *.mov
 *.mkv
+VoxtralApp/tmpdir_lang_id/
+VoxtralApp/tmpdir_lang_id/

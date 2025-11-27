@@ -1,6 +1,6 @@
 {
   "model": {
-    "version": "quantized",
+    "version": "full",
     "available_models": {
       "full": {
         "id": "mistralai/Voxtral-Mini-3B-2507",

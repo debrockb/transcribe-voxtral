@@ -15,11 +15,17 @@ Voxtral is a Flask-based web application for audio/video transcription using the
 ### Core Components
 
 **TranscriptionEngine** (`transcription_engine.py`)
+
 - Encapsulates all Voxtral model interactions
 - Handles device detection (MPS/CUDA/CPU) and model loading
-- Processes audio in 2-minute chunks to manage memory
+- Processes audio in 90-second chunks (optimized for multi-language)
 - Supports progress callbacks for real-time UI updates
 - Cross-platform compatible (Windows & macOS)
+- **Smart Features:**
+  - FFmpeg pre-conversion for complex audio/video formats
+  - Automatic language detection per chunk (SpeechBrain)
+  - Audio normalization for better recognition
+  - torchaudio compatibility fix for SpeechBrain
 
 **Flask Application** (`app.py`)
 - REST API endpoints for file upload, transcription jobs, and status
@@ -27,6 +33,20 @@ Voxtral is a Flask-based web application for audio/video transcription using the
 - Background threading for non-blocking transcription
 - Job tracking with in-memory storage (dict-based)
 - Video-to-audio conversion support (moviepy)
+- CSRF protection via custom header validation (`X-Voxtral-Request`)
+- Memory monitoring with WebSocket alerts
+
+**ConfigManager** (`config_manager.py`)
+
+- JSON-based configuration with dot-notation access (`config.get("model.version")`)
+- Model selection persistence (full vs quantized)
+- Default configuration fallback
+
+**UpdateChecker** (`update_checker.py`)
+
+- GitHub release API integration
+- Version comparison using `packaging` library
+- ZIP-based updates for non-git installations
 
 **Processing Pipeline:**
 ```
@@ -240,24 +260,41 @@ export PYTHONPATH=/Users/ddbco/Desktop/Voxtral/transcribe-voxtral-main/VoxtralAp
 ## Dependencies
 
 **Core:**
+
 - Python 3.11+ required
 - torch, transformers, librosa, soundfile - ML/audio processing
 - Flask, Flask-SocketIO - Web framework and real-time comms
+- psutil - System memory monitoring
+- packaging, requests - Version checking and updates
 - moviepy (optional) - Video conversion (requires ffmpeg)
 
 **Dev:**
+
 - pytest, pytest-cov, pytest-flask - Testing framework
 - black, isort, flake8 - Code quality
+- bandit, safety - Security scanning
 - See `requirements.txt` and `requirements-dev.txt`
+
+## Custom Slash Commands
+
+The `.claude/commands/` directory contains custom commands for common tasks:
+
+- `/run-tests` - Run pytest suite excluding model-dependent tests
+- `/check-security` - Run path traversal and security tests
+- `/start-app` - Start the Flask server
+- `/check-style` - Run flake8, black, and isort
+- `/bump-version` - Update VERSION and config.json for releases
+- `/debug-app` - Diagnose system status, dependencies, and configuration
 
 ## Important Notes
 
 - **Virtual Environment**: Use `voxtral_env/` (not `test_venv/`) for development
 - **Test Virtual Environment**: `test_venv/` is used for running tests with dev dependencies
-- **Git**: This is NOT currently a git repository (working directory shows "Is directory a git repo: No")
 - **Privacy**: All processing is local - no data sent to cloud services
-- **Model Persistence**: Model stays loaded between requests (don't reload per-request)
+- **Model Loading**: Model is NOT loaded at startup - users select model via web UI first
 - **Job Storage**: Jobs are stored in-memory (lost on restart) - consider persistence for production
+- **Security**: Server binds to 127.0.0.1 only; state-changing endpoints require `X-Voxtral-Request` header
+- **Updates**: Supports both git-based and ZIP-based updates via `/api/updates/install`
 
 ## File Structure Reference
 
@@ -265,18 +302,25 @@ export PYTHONPATH=/Users/ddbco/Desktop/Voxtral/transcribe-voxtral-main/VoxtralAp
 transcribe-voxtral-main/VoxtralApp/
 ├── app.py                      # Flask web application
 ├── transcription_engine.py     # Core transcription logic
+├── config_manager.py           # Configuration management
+├── update_checker.py           # GitHub release checking
+├── config.json                 # User/app configuration
+├── VERSION                     # Current version number
 ├── transcribe_voxtral.py       # CLI script (original)
 ├── requirements.txt            # Production dependencies
 ├── requirements-dev.txt        # Development dependencies
 ├── pyproject.toml             # Tool configurations (black, isort, etc)
 ├── pytest.ini                 # Pytest configuration
 ├── .flake8                    # Flake8 linting rules
+├── .claude/commands/          # Custom Claude Code slash commands
 ├── static/                    # Frontend assets (CSS, JS)
 ├── templates/                 # HTML templates
 ├── tests/                     # Test suite
 │   ├── conftest.py           # Shared fixtures and mocks
 │   ├── test_api.py           # API endpoint tests
 │   ├── test_transcription_engine.py
+│   ├── test_update_checker.py
+│   ├── test_zip_updater.py
 │   ├── test_integration.py
 │   └── test_platform_compatibility.py
 ├── uploads/                   # Temporary upload directory

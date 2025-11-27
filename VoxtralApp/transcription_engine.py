@@ -2,15 +2,26 @@
 Voxtral Transcription Engine
 Refactored version of transcribe_voxtral.py for web application use
 Supports progress callbacks and is designed for cross-platform compatibility (Windows & macOS)
+Features: Automatic language detection, FFmpeg conversion, audio normalization
 """
 
 import gc
 import logging
 import os
+import subprocess
 import tempfile
 import warnings
 from pathlib import Path
 from typing import Callable, Dict, Optional
+
+# --- CRITICAL COMPATIBILITY FIX (MUST BE BEFORE TORCHAUDIO/SPEECHBRAIN IMPORT) ---
+# We patch torchaudio FIRST, so when SpeechBrain loads, it sees the function exists.
+import torchaudio
+if not hasattr(torchaudio, "list_audio_backends"):
+    def _list_audio_backends():
+        return ["soundfile"]
+    torchaudio.list_audio_backends = _list_audio_backends
+# ----------------------------------------------------------------------
 
 import librosa
 import numpy as np
@@ -21,16 +32,56 @@ from transformers import AutoProcessor, BitsAndBytesConfig, VoxtralForConditiona
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# --- CONFIGURATION ---
+SUPPORTED_LANGS = {"en", "fr", "de", "es", "it", "nl", "pt", "hi", "pl", "ru", "ja", "ko", "zh", "ar"}
+DEFAULT_CHUNK_DURATION_S = 90  # 90s is optimal for multi-lingual switching
+
+
+def convert_to_clean_wav(input_path: str, output_path: str) -> bool:
+    """
+    Uses FFmpeg to convert complex MP4/Teams audio to a clean,
+    simple 16kHz Mono WAV file that Python can't fail on.
+
+    Args:
+        input_path: Path to input audio/video file
+        output_path: Path for output WAV file
+
+    Returns:
+        True if conversion successful, False otherwise
+    """
+    try:
+        command = [
+            "ffmpeg",
+            "-y",                     # Overwrite output
+            "-i", input_path,         # Input
+            "-ar", "16000",           # 16kHz Sample Rate
+            "-ac", "1",               # Mono
+            "-c:a", "pcm_s16le",      # Standard WAV PCM encoding
+            "-vn",                    # No Video
+            "-loglevel", "error",     # Quiet mode
+            output_path
+        ]
+        subprocess.run(command, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg conversion failed: {e}")
+        return False
+    except FileNotFoundError:
+        logger.error("FFmpeg not found. Please install FFmpeg (brew install ffmpeg / choco install ffmpeg)")
+        return False
 
 
 class TranscriptionEngine:
     """
     Engine for transcribing audio files using the Mistral AI Voxtral model.
     Designed for cross-platform compatibility and real-time progress updates.
+    Features: Automatic language detection, FFmpeg conversion, audio normalization.
     """
 
     def __init__(
@@ -39,6 +90,7 @@ class TranscriptionEngine:
         device: Optional[str] = None,
         progress_callback: Optional[Callable[[Dict], None]] = None,
         quantization: Optional[str] = None,
+        auto_detect_language: bool = True,
     ):
         """
         Initialize the transcription engine.
@@ -48,12 +100,20 @@ class TranscriptionEngine:
             device: Device to use (mps/cuda/cpu). Auto-detects if None.
             progress_callback: Function to call with progress updates
             quantization: Quantization mode ('4bit', '8bit', or None for full precision)
+            auto_detect_language: Enable automatic language detection per chunk (requires speechbrain)
         """
         self.model_id = model_id
         self.progress_callback = progress_callback
         self.quantization = quantization
+        self.auto_detect_language = auto_detect_language
         self.device = device or self._detect_device()
-        self.dtype = torch.bfloat16 if self.device in ["cuda", "mps"] else torch.float32
+        # IMPORTANT: MPS requires float32, only CUDA supports bfloat16
+        if self.device == "mps":
+            self.dtype = torch.float32
+        elif self.device == "cuda":
+            self.dtype = torch.bfloat16
+        else:
+            self.dtype = torch.float32
 
         logger.info(f"Initializing TranscriptionEngine on device: {self.device}")
         if quantization:
@@ -62,7 +122,9 @@ class TranscriptionEngine:
         # Load model and processor
         self.processor = None
         self.model = None
+        self.lang_classifier = None
         self._load_model()
+        self._load_language_classifier()
 
     def _detect_device(self) -> str:
         """Auto-detect the best available device (MPS/CUDA/CPU)."""
@@ -156,6 +218,88 @@ class TranscriptionEngine:
             self._emit_progress({"status": "error", "message": error_msg, "error": str(e)})
             raise
 
+    def _load_language_classifier(self):
+        """Load the SpeechBrain language classifier for automatic language detection."""
+        if not self.auto_detect_language:
+            logger.info("Automatic language detection disabled")
+            return
+
+        try:
+            self._emit_progress({
+                "status": "loading_classifier",
+                "message": "Loading language detection model..."
+            })
+
+            # Import SpeechBrain here to avoid import errors if not installed
+            from speechbrain.inference.classifiers import EncoderClassifier
+
+            self.lang_classifier = EncoderClassifier.from_hparams(
+                source="speechbrain/lang-id-voxlingua107-ecapa",
+                savedir="tmpdir_lang_id"
+            )
+
+            logger.info("SpeechBrain language classifier loaded successfully")
+            self._emit_progress({
+                "status": "classifier_loaded",
+                "message": "Language detection model loaded"
+            })
+
+        except ImportError:
+            logger.warning(
+                "SpeechBrain not installed. Automatic language detection disabled. "
+                "Install with: pip install speechbrain"
+            )
+            self.auto_detect_language = False
+            self.lang_classifier = None
+        except Exception as e:
+            logger.warning(f"Failed to load language classifier: {e}. Using manual language selection.")
+            self.auto_detect_language = False
+            self.lang_classifier = None
+
+    def _detect_chunk_language(self, audio_path: str, last_detected_lang: str = "en") -> str:
+        """
+        Detect the language of an audio chunk using SpeechBrain classifier.
+
+        Args:
+            audio_path: Path to the audio chunk file
+            last_detected_lang: Fallback language if detection fails
+
+        Returns:
+            Detected language code (e.g., 'en', 'fr', 'de')
+        """
+        if not self.lang_classifier:
+            return last_detected_lang
+
+        try:
+            waveform, sr = torchaudio.load(audio_path)
+
+            if sr != 16000:
+                resampler = torchaudio.transforms.Resample(sr, 16000)
+                waveform = resampler(waveform)
+
+            # Check if audio is too quiet (likely silence)
+            if waveform.abs().mean() < 0.001:
+                return last_detected_lang
+
+            # Convert to mono if needed
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+
+            _, _, _, text_lab = self.lang_classifier.classify_batch(waveform)
+            del waveform
+
+            detected_code = text_lab[0].split(':')[0].lower()
+
+            # Only return if it's a supported language
+            if detected_code not in SUPPORTED_LANGS:
+                return last_detected_lang
+
+            return detected_code
+
+        except Exception as e:
+            logger.debug(f"Language detection failed: {e}")
+            return last_detected_lang
+
     def _emit_progress(self, data: Dict):
         """Emit progress update via callback if available."""
         if self.progress_callback:
@@ -223,26 +367,49 @@ class TranscriptionEngine:
         inputs = inputs.to(self.device, dtype=self.dtype)
 
         with torch.no_grad():
-            outputs = self.model.generate(**inputs, max_new_tokens=512)
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=2048,
+                num_beams=1,
+                do_sample=False
+            )
 
         transcription = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
-        return transcription
+
+        # Clean up language tags that may appear in output
+        for lang in SUPPORTED_LANGS:
+            transcription = transcription.replace(f"lang:{lang}", "")
+
+        del inputs
+        del outputs
+
+        return transcription.strip()
 
     def transcribe_file(
-        self, input_audio_path: str, output_text_path: str, language: str = "en", chunk_duration_s: int = 120  # 2 minutes
+        self,
+        input_audio_path: str,
+        output_text_path: str,
+        language: str = "en",
+        chunk_duration_s: int = DEFAULT_CHUNK_DURATION_S,
     ) -> Dict:
         """
         Transcribe a complete audio file with chunking.
 
+        Features:
+        - FFmpeg pre-conversion for complex audio/video formats
+        - Audio normalization for better recognition
+        - Automatic language detection per chunk (if enabled)
+
         Args:
             input_audio_path: Path to input audio file
             output_text_path: Path to save transcription
-            language: Language code for transcription
-            chunk_duration_s: Duration of each chunk in seconds
+            language: Language code for transcription (used if auto-detection disabled)
+            chunk_duration_s: Duration of each chunk in seconds (default: 90s)
 
         Returns:
             Dictionary with transcription results and metadata
         """
+        temp_clean_wav = None
         try:
             # Convert paths to Path objects for cross-platform compatibility
             input_path = Path(input_audio_path)
@@ -254,11 +421,28 @@ class TranscriptionEngine:
             sample_rate = 16000
 
             self._emit_progress(
-                {"status": "loading_audio", "message": f"Loading audio file: {input_path.name}", "progress": 0}
+                {"status": "converting", "message": f"Converting audio: {input_path.name}", "progress": 0}
             )
 
-            logger.info(f"Loading audio file: {input_audio_path}")
-            waveform, sr = librosa.load(str(input_path), sr=sample_rate, mono=True)
+            # Step 1: Convert to clean WAV using FFmpeg (handles complex formats better)
+            logger.info(f"Converting audio file: {input_audio_path}")
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                temp_clean_wav = tmp.name
+
+            if convert_to_clean_wav(str(input_path), temp_clean_wav):
+                logger.info("FFmpeg conversion successful, loading clean WAV")
+                audio_to_load = temp_clean_wav
+            else:
+                logger.warning("FFmpeg conversion failed, loading original file directly")
+                audio_to_load = str(input_path)
+
+            self._emit_progress(
+                {"status": "loading_audio", "message": f"Loading audio: {input_path.name}", "progress": 5}
+            )
+
+            # Step 2: Load audio into RAM
+            logger.info(f"Loading audio file: {audio_to_load}")
+            waveform, _ = librosa.load(audio_to_load, sr=sample_rate, mono=True)
             total_duration_s = len(waveform) / sample_rate
 
             logger.info(f"Audio loaded. Duration: {total_duration_s / 60:.2f} minutes")
@@ -277,17 +461,25 @@ class TranscriptionEngine:
                 {
                     "status": "processing",
                     "message": f"Processing audio in {num_chunks} chunks",
-                    "progress": 0,
+                    "progress": 10,
                     "total_chunks": num_chunks,
                     "current_chunk": 0,
                 }
             )
 
             logger.info(f"Processing audio in {num_chunks} chunks...")
+            current_lang = language  # Track current language for multi-lingual files
 
             for i, start in enumerate(range(0, len(waveform), chunk_len)):
                 end = start + chunk_len
                 chunk_waveform = waveform[start:end]
+
+                # Skip very short chunks (less than 1 second)
+                if len(chunk_waveform) < sample_rate:
+                    continue
+
+                # Step 3: Normalize audio for better recognition
+                chunk_waveform = librosa.util.normalize(chunk_waveform)
 
                 # Create temporary file (cross-platform)
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -296,24 +488,40 @@ class TranscriptionEngine:
 
                 try:
                     chunk_num = i + 1
-                    progress_pct = int((chunk_num / num_chunks) * 100)
+                    # Progress from 10% to 95% during chunk processing
+                    progress_pct = 10 + int((chunk_num / num_chunks) * 85)
+
+                    # Step 4: Detect language for this chunk (if auto-detection enabled)
+                    if self.auto_detect_language and self.lang_classifier:
+                        detected_lang = self._detect_chunk_language(temp_chunk_path, current_lang)
+                        if detected_lang != current_lang:
+                            logger.info(f"Language switch detected: {current_lang.upper()} -> {detected_lang.upper()}")
+                            current_lang = detected_lang
+                    else:
+                        detected_lang = current_lang
 
                     self._emit_progress(
                         {
                             "status": "processing",
-                            "message": f"Transcribing chunk {chunk_num}/{num_chunks}",
+                            "message": f"Transcribing chunk {chunk_num}/{num_chunks} [{detected_lang.upper()}]",
                             "progress": progress_pct,
                             "total_chunks": num_chunks,
                             "current_chunk": chunk_num,
+                            "detected_language": detected_lang,
                         }
                     )
 
-                    logger.info(f"Transcribing chunk {chunk_num}/{num_chunks}")
+                    logger.info(f"Transcribing chunk {chunk_num}/{num_chunks} [{detected_lang.upper()}]")
 
-                    chunk_transcription = self._transcribe_chunk(temp_chunk_path, language)
-                    all_transcriptions.append(chunk_transcription)
+                    # Step 5: Transcribe with detected language
+                    chunk_transcription = self._transcribe_chunk(temp_chunk_path, detected_lang)
 
-                    logger.info(f'Chunk {chunk_num} completed: "{chunk_transcription[:50]}..."')
+                    if chunk_transcription:
+                        all_transcriptions.append(chunk_transcription)
+                        preview = chunk_transcription[:50].replace('\n', ' ')
+                        logger.info(f'Chunk {chunk_num} completed: "{preview}..."')
+                    else:
+                        logger.info(f"Chunk {chunk_num}: [Silence/No text]")
 
                 finally:
                     # Clean up temporary file
@@ -322,6 +530,10 @@ class TranscriptionEngine:
 
                     # Clean up memory after each chunk to prevent accumulation
                     self._cleanup_memory()
+
+            # Clean up full waveform to free memory
+            del waveform
+            self._cleanup_memory()
 
             # Combine all transcriptions
             self._emit_progress({"status": "finalizing", "message": "Combining transcriptions...", "progress": 95})
@@ -365,8 +577,17 @@ class TranscriptionEngine:
 
             return {"status": "error", "error": str(e), "message": error_msg}
 
+        finally:
+            # Clean up temporary WAV file created by FFmpeg
+            if temp_clean_wav and os.path.exists(temp_clean_wav):
+                try:
+                    os.remove(temp_clean_wav)
+                    logger.debug(f"Cleaned up temporary WAV: {temp_clean_wav}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp file {temp_clean_wav}: {e}")
+
     def get_device_info(self) -> Dict:
-        """Get information about the current device."""
+        """Get information about the current device and capabilities."""
         return {
             "device": self.device,
             "device_name": self.device.upper(),
@@ -374,6 +595,8 @@ class TranscriptionEngine:
             "mps_available": torch.backends.mps.is_available(),
             "cuda_available": torch.cuda.is_available(),
             "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+            "auto_detect_language": self.auto_detect_language,
+            "lang_classifier_loaded": self.lang_classifier is not None,
         }
 
 

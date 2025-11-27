@@ -274,8 +274,15 @@ class TranscriptionEngine:
         waveform = None
         resampler = None
         try:
-            # Use soundfile backend to avoid torchcodec requirement
-            waveform, sr = torchaudio.load(audio_path, backend="soundfile")
+            # Use soundfile directly to avoid torchaudio's torchcodec requirement
+            audio_np, sr = sf.read(audio_path)
+            waveform = torch.from_numpy(audio_np).float()
+            # Ensure correct shape: (channels, samples)
+            if waveform.dim() == 1:
+                waveform = waveform.unsqueeze(0)
+            elif waveform.dim() == 2 and waveform.shape[1] < waveform.shape[0]:
+                # soundfile returns (samples, channels), we need (channels, samples)
+                waveform = waveform.T
 
             if sr != 16000:
                 resampler = torchaudio.transforms.Resample(sr, 16000)

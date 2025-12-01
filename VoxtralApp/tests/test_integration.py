@@ -75,7 +75,9 @@ class TestFileUploadWorkflow:
             assert download_response.status_code == 200
 
             # Step 5: Delete transcription
-            delete_response = client.delete(f"/api/history/transcriptions/{trans_filename}", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+            delete_response = client.delete(
+                f"/api/history/transcriptions/{trans_filename}", headers={"X-Voxtral-Request": "voxtral-web-ui"}
+            )
             assert delete_response.status_code == 200
 
     def test_multiple_file_uploads(self, client, temp_dir):
@@ -116,7 +118,7 @@ class TestFileUploadWorkflow:
         filename = upload_result["filename"]
 
         # Delete file
-        delete_response = client.delete(f"/api/history/uploads/{filename}", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        delete_response = client.delete(f"/api/history/uploads/{filename}", headers={"X-Voxtral-Request": "voxtral-web-ui"})
         assert delete_response.status_code == 200
 
         # Verify deletion

@@ -27,6 +27,7 @@ sys.modules["torch"] = MagicMock()
 sys.modules["torch.cuda"] = MagicMock()
 sys.modules["torch.backends"] = MagicMock()
 sys.modules["torch.backends.mps"] = MagicMock()
+sys.modules["torch.hub"] = MagicMock()
 sys.modules["transformers"] = MagicMock()
 sys.modules["transformers.models"] = MagicMock()
 sys.modules["transformers.models.whisper"] = MagicMock()
@@ -34,9 +35,21 @@ sys.modules["librosa"] = MagicMock()
 sys.modules["soundfile"] = MagicMock()
 sys.modules["accelerate"] = MagicMock()
 
+# Mock torchaudio and speechbrain (added for smart transcription features)
+sys.modules["torchaudio"] = MagicMock()
+sys.modules["torchaudio.transforms"] = MagicMock()
+sys.modules["torchaudio.functional"] = MagicMock()
+sys.modules["speechbrain"] = MagicMock()
+sys.modules["speechbrain.inference"] = MagicMock()
+sys.modules["speechbrain.inference.classifiers"] = MagicMock()
+sys.modules["psutil"] = MagicMock()
+
 # Configure torch mocks
 sys.modules["torch"].cuda.is_available = MagicMock(return_value=False)
 sys.modules["torch"].backends.mps.is_available = MagicMock(return_value=False)
+
+# Configure torchaudio mock
+sys.modules["torchaudio"].list_audio_backends = MagicMock(return_value=["soundfile"])
 
 # Now safe to import app
 from app import app as flask_app  # noqa: E402

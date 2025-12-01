@@ -163,8 +163,15 @@ class TestZipUpdater:
     @patch("app.os._exit")
     @patch("app.socketio")
     def test_successful_update_flow_windows(
-        self, mock_socketio, mock_exit, mock_zipfile, mock_requests, mock_check_updates,
-        temp_install_dir, mock_update_info, tmp_path
+        self,
+        mock_socketio,
+        mock_exit,
+        mock_zipfile,
+        mock_requests,
+        mock_check_updates,
+        temp_install_dir,
+        mock_update_info,
+        tmp_path,
     ):
         """Test successful update flow on Windows"""
         # Mock platform
@@ -175,10 +182,7 @@ class TestZipUpdater:
             from app import perform_zip_update
 
             # Mock check_for_updates to return update info
-            mock_check_updates.return_value = {
-                **mock_update_info,
-                "update_available": True
-            }
+            mock_check_updates.return_value = {**mock_update_info, "update_available": True}
 
             # Mock download response
             mock_response = Mock()
@@ -214,10 +218,7 @@ class TestZipUpdater:
         from app import perform_zip_update
 
         # Mock check_for_updates
-        mock_check_updates.return_value = {
-            **mock_update_info,
-            "update_available": True
-        }
+        mock_check_updates.return_value = {**mock_update_info, "update_available": True}
 
         # Mock failed download
         mock_requests.side_effect = Exception("Network error")
@@ -240,10 +241,7 @@ class TestZipUpdater:
         from app import perform_zip_update
 
         # Mock check_for_updates
-        mock_check_updates.return_value = {
-            **mock_update_info,
-            "update_available": True
-        }
+        mock_check_updates.return_value = {**mock_update_info, "update_available": True}
 
         # Mock successful download
         mock_response = Mock()
@@ -268,16 +266,21 @@ class TestZipUpdater:
     @patch("app.tempfile.mkdtemp")
     @patch("app.socketio")
     def test_windows_batch_script_creation(
-        self, mock_socketio, mock_mkdtemp, mock_zipfile, mock_requests, mock_check_updates, temp_install_dir, mock_update_info, tmp_path
+        self,
+        mock_socketio,
+        mock_mkdtemp,
+        mock_zipfile,
+        mock_requests,
+        mock_check_updates,
+        temp_install_dir,
+        mock_update_info,
+        tmp_path,
     ):
         """Test that Windows batch script is created with correct content"""
         from app import perform_zip_update
 
         # Mock check_for_updates
-        mock_check_updates.return_value = {
-            **mock_update_info,
-            "update_available": True
-        }
+        mock_check_updates.return_value = {**mock_update_info, "update_available": True}
 
         temp_dir = tmp_path / "update_temp"
         temp_dir.mkdir()
@@ -342,16 +345,21 @@ class TestZipUpdater:
     @patch("app.tempfile.mkdtemp")
     @patch("app.socketio")
     def test_mac_shell_script_creation(
-        self, mock_socketio, mock_mkdtemp, mock_zipfile, mock_requests, mock_check_updates, temp_install_dir, mock_update_info, tmp_path
+        self,
+        mock_socketio,
+        mock_mkdtemp,
+        mock_zipfile,
+        mock_requests,
+        mock_check_updates,
+        temp_install_dir,
+        mock_update_info,
+        tmp_path,
     ):
         """Test that Mac/Linux shell script is created with correct content"""
         from app import perform_zip_update
 
         # Mock check_for_updates
-        mock_check_updates.return_value = {
-            **mock_update_info,
-            "update_available": True
-        }
+        mock_check_updates.return_value = {**mock_update_info, "update_available": True}
 
         temp_dir = tmp_path / "update_temp"
         temp_dir.mkdir()
@@ -409,10 +417,7 @@ class TestZipUpdater:
         from app import perform_zip_update
 
         # Mock check_for_updates
-        mock_check_updates.return_value = {
-            **mock_update_info,
-            "update_available": True
-        }
+        mock_check_updates.return_value = {**mock_update_info, "update_available": True}
 
         # Test failure case - download fails
         mock_requests.side_effect = Exception("Network error")

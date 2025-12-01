@@ -87,9 +87,7 @@ def validate_csrf_protection():
     # Require custom header that forms cannot set
     custom_header = request.headers.get("X-Voxtral-Request")
     if custom_header != "voxtral-web-ui":
-        logger.warning(
-            f"CSRF validation failed: Missing or invalid X-Voxtral-Request header from {request.remote_addr}"
-        )
+        logger.warning(f"CSRF validation failed: Missing or invalid X-Voxtral-Request header from {request.remote_addr}")
         return False
 
     return True
@@ -988,7 +986,9 @@ def perform_zip_update():
         # Emit progress update with timestamps
         def emit_progress(stage, message, progress=0):
             timestamp = datetime.now().strftime("%H:%M:%S")
-            socketio.emit("update_progress", {"stage": stage, "message": message, "progress": progress, "timestamp": timestamp})
+            socketio.emit(
+                "update_progress", {"stage": stage, "message": message, "progress": progress, "timestamp": timestamp}
+            )
             logger.info(f"[{timestamp}] Update progress: {stage} - {message} ({progress}%)")
 
         emit_progress("checking", "Checking for updates...", 5)
@@ -1137,7 +1137,9 @@ def perform_zip_update():
                     with open(new_config_path, "w", encoding="utf-8") as f:
                         json.dump(merged_config, f, indent=2)
 
-                    logger.info(f"  Config merged successfully (new version: {merged_config.get('app', {}).get('version', 'unknown')})")
+                    logger.info(
+                        f"  Config merged successfully (new version: {merged_config.get('app', {}).get('version', 'unknown')})"
+                    )
                 except Exception as e:
                     logger.warning(f"  Config merge failed, using new config: {e}")
 
@@ -1555,7 +1557,11 @@ exit 0
             except Exception:
                 pass
 
-            return False, f"Permission denied: Windows cannot move files while they are in use. Please close the application and run the update script manually.", {}
+            return (
+                False,
+                f"Permission denied: Windows cannot move files while they are in use. Please close the application and run the update script manually.",
+                {},
+            )
 
         except Exception as e:
             # General error handling

@@ -147,7 +147,9 @@ class TestHistoryDeletion:
 
         assert dest_file.exists()
 
-        response = client.delete("/api/history/transcriptions/single_delete.txt", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        response = client.delete(
+            "/api/history/transcriptions/single_delete.txt", headers={"X-Voxtral-Request": "voxtral-web-ui"}
+        )
         assert response.status_code == 200
         result = json.loads(response.data)
         assert result["status"] == "success"
@@ -156,7 +158,9 @@ class TestHistoryDeletion:
 
     def test_delete_nonexistent_transcription(self, client):
         """Test deleting a non-existent transcription"""
-        response = client.delete("/api/history/transcriptions/does_not_exist.txt", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        response = client.delete(
+            "/api/history/transcriptions/does_not_exist.txt", headers={"X-Voxtral-Request": "voxtral-web-ui"}
+        )
         assert response.status_code == 404
 
     def test_delete_all_transcriptions(self, client, app, sample_text_file):
@@ -175,7 +179,7 @@ class TestHistoryDeletion:
         for f in test_files:
             assert f.exists()
 
-        response = client.delete("/api/history/transcriptions/all", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        response = client.delete("/api/history/transcriptions/all", headers={"X-Voxtral-Request": "voxtral-web-ui"})
         assert response.status_code == 200
         result = json.loads(response.data)
         assert result["status"] == "success"
@@ -201,7 +205,7 @@ class TestHistoryDeletion:
         assert filename in filenames
 
         # Delete file
-        delete_response = client.delete(f"/api/history/uploads/{filename}", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        delete_response = client.delete(f"/api/history/uploads/{filename}", headers={"X-Voxtral-Request": "voxtral-web-ui"})
         assert delete_response.status_code == 200
 
         # Verify file is gone
@@ -223,7 +227,7 @@ class TestHistoryDeletion:
                 client.post("/api/upload", data=upload_data, content_type="multipart/form-data")
 
         # Delete all
-        response = client.delete("/api/history/uploads/all", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        response = client.delete("/api/history/uploads/all", headers={"X-Voxtral-Request": "voxtral-web-ui"})
         assert response.status_code == 200
         result = json.loads(response.data)
         assert result["status"] == "success"

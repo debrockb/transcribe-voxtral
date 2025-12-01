@@ -17,9 +17,12 @@ from typing import Callable, Dict, Optional
 # --- CRITICAL COMPATIBILITY FIX (MUST BE BEFORE TORCHAUDIO/SPEECHBRAIN IMPORT) ---
 # We patch torchaudio FIRST, so when SpeechBrain loads, it sees the function exists.
 import torchaudio
+
 if not hasattr(torchaudio, "list_audio_backends"):
+
     def _list_audio_backends():
         return ["soundfile"]
+
     torchaudio.list_audio_backends = _list_audio_backends
 # ----------------------------------------------------------------------
 
@@ -59,14 +62,19 @@ def convert_to_clean_wav(input_path: str, output_path: str) -> bool:
     try:
         command = [
             "ffmpeg",
-            "-y",                     # Overwrite output
-            "-i", input_path,         # Input
-            "-ar", "16000",           # 16kHz Sample Rate
-            "-ac", "1",               # Mono
-            "-c:a", "pcm_s16le",      # Standard WAV PCM encoding
-            "-vn",                    # No Video
-            "-loglevel", "error",     # Quiet mode
-            output_path
+            "-y",  # Overwrite output
+            "-i",
+            input_path,  # Input
+            "-ar",
+            "16000",  # 16kHz Sample Rate
+            "-ac",
+            "1",  # Mono
+            "-c:a",
+            "pcm_s16le",  # Standard WAV PCM encoding
+            "-vn",  # No Video
+            "-loglevel",
+            "error",  # Quiet mode
+            output_path,
         ]
         subprocess.run(command, check=True)
         return True
@@ -164,15 +172,19 @@ class TranscriptionEngine:
                         "Loading large model on CPU will be VERY slow (10-30 minutes). "
                         "For better performance, use a system with NVIDIA GPU."
                     )
-                    self._emit_progress({
-                        "status": "warning",
-                        "message": "CPU detected - Model loading will take 10-30 minutes. Please be patient...",
-                    })
+                    self._emit_progress(
+                        {
+                            "status": "warning",
+                            "message": "CPU detected - Model loading will take 10-30 minutes. Please be patient...",
+                        }
+                    )
                 else:
-                    self._emit_progress({
-                        "status": "warning",
-                        "message": f"Quantization not supported on {self.device.upper()}, using full precision",
-                    })
+                    self._emit_progress(
+                        {
+                            "status": "warning",
+                            "message": f"Quantization not supported on {self.device.upper()}, using full precision",
+                        }
+                    )
 
                 self.quantization = None  # Disable quantization
                 model_kwargs["device_map"] = self.device
@@ -197,9 +209,7 @@ class TranscriptionEngine:
                 # No quantization - use specified device
                 model_kwargs["device_map"] = self.device
 
-            self.model = VoxtralForConditionalGeneration.from_pretrained(
-                self.model_id, **model_kwargs
-            )
+            self.model = VoxtralForConditionalGeneration.from_pretrained(self.model_id, **model_kwargs)
 
             self._emit_progress(
                 {
@@ -226,29 +236,21 @@ class TranscriptionEngine:
             return
 
         try:
-            self._emit_progress({
-                "status": "loading_classifier",
-                "message": "Loading language detection model..."
-            })
+            self._emit_progress({"status": "loading_classifier", "message": "Loading language detection model..."})
 
             # Import SpeechBrain here to avoid import errors if not installed
             from speechbrain.inference.classifiers import EncoderClassifier
 
             self.lang_classifier = EncoderClassifier.from_hparams(
-                source="speechbrain/lang-id-voxlingua107-ecapa",
-                savedir="tmpdir_lang_id"
+                source="speechbrain/lang-id-voxlingua107-ecapa", savedir="tmpdir_lang_id"
             )
 
             logger.info("SpeechBrain language classifier loaded successfully")
-            self._emit_progress({
-                "status": "classifier_loaded",
-                "message": "Language detection model loaded"
-            })
+            self._emit_progress({"status": "classifier_loaded", "message": "Language detection model loaded"})
 
         except ImportError:
             logger.warning(
-                "SpeechBrain not installed. Automatic language detection disabled. "
-                "Install with: pip install speechbrain"
+                "SpeechBrain not installed. Automatic language detection disabled. " "Install with: pip install speechbrain"
             )
             self.auto_detect_language = False
             self.lang_classifier = None
@@ -312,8 +314,8 @@ class TranscriptionEngine:
             logger.debug(f"SpeechBrain raw output: '{raw_label}'")
 
             # Parse the language code - format is typically "fr: French" or just "fr"
-            if ':' in raw_label:
-                detected_code = raw_label.split(':')[0].strip().lower()
+            if ":" in raw_label:
+                detected_code = raw_label.split(":")[0].strip().lower()
             else:
                 detected_code = raw_label.strip().lower()
 
@@ -413,12 +415,7 @@ class TranscriptionEngine:
             inputs = inputs.to(self.device, dtype=self.dtype)
 
             with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=2048,
-                    num_beams=1,
-                    do_sample=False
-                )
+                outputs = self.model.generate(**inputs, max_new_tokens=2048, num_beams=1, do_sample=False)
 
             transcription = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
 
@@ -476,9 +473,7 @@ class TranscriptionEngine:
 
             sample_rate = 16000
 
-            self._emit_progress(
-                {"status": "converting", "message": f"Converting audio: {input_path.name}", "progress": 0}
-            )
+            self._emit_progress({"status": "converting", "message": f"Converting audio: {input_path.name}", "progress": 0})
 
             # Step 1: Convert to clean WAV using FFmpeg (handles complex formats better)
             logger.info(f"Converting audio file: {input_audio_path}")
@@ -492,9 +487,7 @@ class TranscriptionEngine:
                 logger.warning("FFmpeg conversion failed, loading original file directly")
                 audio_to_load = str(input_path)
 
-            self._emit_progress(
-                {"status": "loading_audio", "message": f"Loading audio: {input_path.name}", "progress": 5}
-            )
+            self._emit_progress({"status": "loading_audio", "message": f"Loading audio: {input_path.name}", "progress": 5})
 
             # Step 2: Load audio into RAM
             logger.info(f"Loading audio file: {audio_to_load}")
@@ -528,7 +521,9 @@ class TranscriptionEngine:
 
             # Log initial memory state
             mem_info = psutil.virtual_memory()
-            logger.info(f"Memory before processing: {mem_info.used / (1024**3):.2f}GB used / {mem_info.total / (1024**3):.2f}GB total")
+            logger.info(
+                f"Memory before processing: {mem_info.used / (1024**3):.2f}GB used / {mem_info.total / (1024**3):.2f}GB total"
+            )
 
             for i, start in enumerate(range(0, len(waveform), chunk_len)):
                 end = start + chunk_len
@@ -582,7 +577,7 @@ class TranscriptionEngine:
 
                     if chunk_transcription:
                         all_transcriptions.append(chunk_transcription)
-                        preview = chunk_transcription[:50].replace('\n', ' ')
+                        preview = chunk_transcription[:50].replace("\n", " ")
                         logger.info(f'Chunk {chunk_num} completed: "{preview}..."')
                     else:
                         logger.info(f"Chunk {chunk_num}: [Silence/No text]")

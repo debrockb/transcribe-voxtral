@@ -222,7 +222,9 @@ class TestHistoryEndpoints:
 
         assert dest_file.exists()
 
-        response = client.delete("/api/history/transcriptions/delete_test.txt", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        response = client.delete(
+            "/api/history/transcriptions/delete_test.txt", headers={"X-Voxtral-Request": "voxtral-web-ui"}
+        )
         assert response.status_code == 200
         result = json.loads(response.data)
         assert result["status"] == "success"
@@ -243,7 +245,7 @@ class TestHistoryEndpoints:
             dest_file = output_folder / f"test_{i}.txt"
             shutil.copy(sample_text_file, dest_file)
 
-        response = client.delete("/api/history/transcriptions/all", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+        response = client.delete("/api/history/transcriptions/all", headers={"X-Voxtral-Request": "voxtral-web-ui"})
         assert response.status_code == 200
         result = json.loads(response.data)
         assert result["status"] == "success"
@@ -273,7 +275,7 @@ class TestPathTraversalSecurity:
             assert response.status_code == 404, f"Path traversal not blocked for: {path}"
 
             # Only check JSON if we got a JSON response
-            if response.content_type and 'application/json' in response.content_type:
+            if response.content_type and "application/json" in response.content_type:
                 data = json.loads(response.data)
                 assert data["status"] == "error"
                 assert "not found" in data["message"].lower()
@@ -299,11 +301,11 @@ class TestPathTraversalSecurity:
         ]
 
         for path in malicious_paths:
-            response = client.delete(f"/api/history/transcriptions/{path}", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+            response = client.delete(f"/api/history/transcriptions/{path}", headers={"X-Voxtral-Request": "voxtral-web-ui"})
             assert response.status_code == 404, f"Path traversal not blocked for: {path}"
 
             # Only check JSON if we got a JSON response
-            if response.content_type and 'application/json' in response.content_type:
+            if response.content_type and "application/json" in response.content_type:
                 data = json.loads(response.data)
                 assert data["status"] == "error"
 
@@ -328,11 +330,11 @@ class TestPathTraversalSecurity:
         ]
 
         for path in malicious_paths:
-            response = client.delete(f"/api/history/uploads/{path}", headers={'X-Voxtral-Request': 'voxtral-web-ui'})
+            response = client.delete(f"/api/history/uploads/{path}", headers={"X-Voxtral-Request": "voxtral-web-ui"})
             assert response.status_code == 404, f"Path traversal not blocked for: {path}"
 
             # Only check JSON if we got a JSON response
-            if response.content_type and 'application/json' in response.content_type:
+            if response.content_type and "application/json" in response.content_type:
                 data = json.loads(response.data)
                 assert data["status"] == "error"
 

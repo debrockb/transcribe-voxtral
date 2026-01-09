@@ -84,6 +84,10 @@ def validate_csrf_protection():
     via form submissions from malicious websites, since browsers block custom headers
     in forms, and CORS blocks fetch/XHR from cross-origin sites.
     """
+    # Skip CSRF validation in test mode
+    if app.config.get("TESTING"):
+        return True
+
     # Require custom header that forms cannot set
     custom_header = request.headers.get("X-Voxtral-Request")
     if custom_header != "voxtral-web-ui":

@@ -35,6 +35,8 @@ const elements = {
     wordCount: document.getElementById('wordCount'),
     charCount: document.getElementById('charCount'),
     audioDuration: document.getElementById('audioDuration'),
+    confidenceBadge: document.getElementById('confidenceBadge'),
+    confidenceValue: document.getElementById('confidenceValue'),
     copyBtn: document.getElementById('copyBtn'),
     downloadBtn: document.getElementById('downloadBtn'),
     clearBtn: document.getElementById('clearBtn'),
@@ -814,6 +816,7 @@ function displayTranscript(data) {
     const words = transcript.split(/\s+/).filter(w => w.length > 0);
     const chars = transcript.length;
     const duration = data.duration || 0;
+    const confidence = data.confidence || 0;
 
     // Update transcript content
     elements.transcriptContent.textContent = transcript;
@@ -823,11 +826,39 @@ function displayTranscript(data) {
     elements.charCount.textContent = chars.toLocaleString();
     elements.audioDuration.textContent = formatDuration(duration);
 
+    // Update confidence score with color coding
+    updateConfidenceDisplay(confidence);
+
     // Show transcript section
     elements.transcriptSection.style.display = 'block';
 
     // Scroll to transcript
     elements.transcriptSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/**
+ * Update confidence score display with color coding
+ * High (>=85%): Green
+ * Medium (>=70%): Yellow/Amber
+ * Low (<70%): Red
+ */
+function updateConfidenceDisplay(confidence) {
+    if (!elements.confidenceValue || !elements.confidenceBadge) return;
+
+    // Format confidence value
+    elements.confidenceValue.textContent = confidence.toFixed(1);
+
+    // Remove existing color classes
+    elements.confidenceBadge.classList.remove('confidence-high', 'confidence-medium', 'confidence-low');
+
+    // Apply color class based on confidence level
+    if (confidence >= 85) {
+        elements.confidenceBadge.classList.add('confidence-high');
+    } else if (confidence >= 70) {
+        elements.confidenceBadge.classList.add('confidence-medium');
+    } else {
+        elements.confidenceBadge.classList.add('confidence-low');
+    }
 }
 
 // Format duration (minutes to MM:SS)
@@ -894,6 +925,15 @@ function clearTranscript() {
     elements.wordCount.textContent = '0';
     elements.charCount.textContent = '0';
     elements.audioDuration.textContent = '0:00';
+
+    // Reset confidence display
+    if (elements.confidenceValue) {
+        elements.confidenceValue.textContent = '--';
+    }
+    if (elements.confidenceBadge) {
+        elements.confidenceBadge.classList.remove('confidence-high', 'confidence-medium', 'confidence-low');
+    }
+
     elements.transcriptSection.style.display = 'none';
     elements.progressSection.style.display = 'none';
     state.currentJobId = null;

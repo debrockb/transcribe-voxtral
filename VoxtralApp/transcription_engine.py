@@ -394,19 +394,20 @@ class TranscriptionEngine:
         elif self.device == "cuda":
             torch.cuda.empty_cache()
 
-    def _transcribe_chunk(self, temp_chunk_path: str, language: str) -> str:
+    def _transcribe_chunk(self, temp_chunk_path: str, language: str) -> Dict:
         """
-        Transcribe a single audio chunk.
+        Transcribe a single audio chunk and calculate confidence score.
 
         Args:
             temp_chunk_path: Path to temporary chunk file
             language: Language code (e.g., 'en', 'fr', 'es')
 
         Returns:
-            Transcribed text
+            Dictionary with 'text' and 'confidence' keys
         """
         inputs = None
         outputs = None
+        scores = None
         try:
             inputs = self.processor.apply_transcription_request(
                 language=language, model_id=self.model_id, audio=temp_chunk_path, return_tensors="pt"
@@ -415,15 +416,29 @@ class TranscriptionEngine:
             inputs = inputs.to(self.device, dtype=self.dtype)
 
             with torch.no_grad():
-                outputs = self.model.generate(**inputs, max_new_tokens=2048, num_beams=1, do_sample=False)
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=2048,
+                    num_beams=1,
+                    do_sample=False,
+                    output_scores=True,
+                    return_dict_in_generate=True,
+                )
 
-            transcription = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
+            # Extract sequences and scores
+            sequences = outputs.sequences
+            scores = outputs.scores  # Tuple of logits for each generated token
+
+            transcription = self.processor.batch_decode(sequences, skip_special_tokens=True)[0]
+
+            # Calculate confidence score from token probabilities
+            confidence = self._calculate_confidence(scores)
 
             # Clean up language tags that may appear in output
             for lang in SUPPORTED_LANGS:
                 transcription = transcription.replace(f"lang:{lang}", "")
 
-            return transcription.strip()
+            return {"text": transcription.strip(), "confidence": confidence}
 
         finally:
             # Aggressive cleanup of tensors
@@ -431,12 +446,49 @@ class TranscriptionEngine:
                 del inputs
             if outputs is not None:
                 del outputs
+            if scores is not None:
+                del scores
             # Clear device caches immediately after model inference
             gc.collect()
             if self.device == "mps":
                 torch.mps.empty_cache()
             elif self.device == "cuda":
                 torch.cuda.empty_cache()
+
+    def _calculate_confidence(self, scores: tuple) -> float:
+        """
+        Calculate confidence score from model output scores.
+
+        Uses the average probability of the selected tokens across all generation steps.
+
+        Args:
+            scores: Tuple of logits tensors, one per generated token
+
+        Returns:
+            Confidence score as percentage (0-100)
+        """
+        if not scores or len(scores) == 0:
+            return 0.0
+
+        try:
+            confidences = []
+            for step_scores in scores:
+                # Get probabilities via softmax
+                probs = torch.nn.functional.softmax(step_scores, dim=-1)
+                # Get the max probability (the chosen token's probability)
+                max_prob = probs.max(dim=-1).values
+                confidences.append(max_prob.item())
+
+            if not confidences:
+                return 0.0
+
+            # Average confidence across all tokens, scaled to percentage
+            avg_confidence = sum(confidences) / len(confidences) * 100
+            return round(avg_confidence, 1)
+
+        except Exception as e:
+            logger.warning(f"Error calculating confidence: {e}")
+            return 0.0
 
     def transcribe_file(
         self,
@@ -504,6 +556,7 @@ class TranscriptionEngine:
                 )
             chunk_len = optimal_chunk_duration * sample_rate
             all_transcriptions = []
+            chunk_confidences = []  # Track confidence scores per chunk
             num_chunks = int(np.ceil(len(waveform) / chunk_len))
 
             self._emit_progress(
@@ -573,12 +626,28 @@ class TranscriptionEngine:
                     logger.info(f"Transcribing chunk {chunk_num}/{num_chunks} [{detected_lang.upper()}]")
 
                     # Step 5: Transcribe with detected language
-                    chunk_transcription = self._transcribe_chunk(temp_chunk_path, detected_lang)
+                    chunk_result = self._transcribe_chunk(temp_chunk_path, detected_lang)
 
-                    if chunk_transcription:
-                        all_transcriptions.append(chunk_transcription)
-                        preview = chunk_transcription[:50].replace("\n", " ")
-                        logger.info(f'Chunk {chunk_num} completed: "{preview}..."')
+                    chunk_text = chunk_result.get("text", "")
+                    chunk_confidence = chunk_result.get("confidence", 0.0)
+
+                    if chunk_text:
+                        all_transcriptions.append(chunk_text)
+                        chunk_confidences.append(chunk_confidence)
+                        preview = chunk_text[:50].replace("\n", " ")
+                        logger.info(f'Chunk {chunk_num} completed (confidence: {chunk_confidence:.1f}%): "{preview}..."')
+
+                        # Emit chunk completion with confidence
+                        self._emit_progress(
+                            {
+                                "status": "chunk_complete",
+                                "message": f"Chunk {chunk_num}/{num_chunks} complete",
+                                "progress": progress_pct,
+                                "current_chunk": chunk_num,
+                                "total_chunks": num_chunks,
+                                "chunk_confidence": chunk_confidence,
+                            }
+                        )
                     else:
                         logger.info(f"Chunk {chunk_num}: [Silence/No text]")
 
@@ -604,6 +673,21 @@ class TranscriptionEngine:
             logger.info("Combining transcriptions...")
             final_transcription = " ".join(all_transcriptions).strip()
 
+            # Calculate overall confidence score (weighted average based on chunk text length)
+            overall_confidence = 0.0
+            if chunk_confidences:
+                # Weight confidence by the length of each chunk's transcription
+                total_weight = sum(len(t) for t in all_transcriptions)
+                if total_weight > 0:
+                    weighted_sum = sum(
+                        conf * len(text) for conf, text in zip(chunk_confidences, all_transcriptions)
+                    )
+                    overall_confidence = round(weighted_sum / total_weight, 1)
+                else:
+                    overall_confidence = round(sum(chunk_confidences) / len(chunk_confidences), 1)
+
+            logger.info(f"Overall transcription confidence: {overall_confidence:.1f}%")
+
             # Save to file
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(final_transcription)
@@ -615,6 +699,7 @@ class TranscriptionEngine:
                     "progress": 100,
                     "transcript": final_transcription,
                     "output_path": str(output_path),
+                    "confidence": overall_confidence,
                 }
             )
 
@@ -630,6 +715,7 @@ class TranscriptionEngine:
                 "language": language,
                 "word_count": len(final_transcription.split()),
                 "char_count": len(final_transcription),
+                "confidence": overall_confidence,
             }
 
         except Exception as e:

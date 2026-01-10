@@ -332,6 +332,59 @@ body {
     display: flex;
     gap: 18px;
     flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Confidence Score Styling */
+.confidence-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    background: var(--pill);
+    color: var(--text-secondary);
+}
+
+.confidence-value {
+    font-variant-numeric: tabular-nums;
+}
+
+.confidence-percent {
+    font-size: 0.85em;
+    opacity: 0.8;
+}
+
+/* High confidence (>=85%) - Green */
+.confidence-badge.confidence-high {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #065f46;
+    border: 1px solid #10b981;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+/* Medium confidence (>=70%) - Amber */
+.confidence-badge.confidence-medium {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+    border: 1px solid #f59e0b;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+
+/* Low confidence (<70%) - Red */
+.confidence-badge.confidence-low {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #991b1b;
+    border: 1px solid #ef4444;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
 }
 
 .transcript-content {

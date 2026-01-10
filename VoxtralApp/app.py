@@ -380,6 +380,117 @@ def initialize_model():
         return jsonify({"status": "error", "message": f"Failed to start model loading: {str(e)}"}), 500
 
 
+@app.route("/api/model/switch", methods=["POST"])
+def switch_model():
+    """
+    Switch to a different model by unloading current model and loading a new one.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    """
+    global transcription_engine, engine_loading
+
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+
+    # Check if engine is currently loading
+    if engine_loading:
+        return jsonify({"status": "error", "message": "Model is currently loading. Please wait."}), 409
+
+    # Check if a transcription is in progress
+    if engine_lock.locked():
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "Cannot switch models while a transcription is in progress. Please wait for it to complete.",
+                }
+            ),
+            409,
+        )
+
+    # Validate JSON request body
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"status": "error", "message": "Invalid or missing JSON request body"}), 400
+
+    model_version = data.get("version")
+    if not model_version:
+        return jsonify({"status": "error", "message": "Model version is required"}), 400
+
+    # Validate model version
+    available_models = config.get_all_models()
+    if model_version not in available_models:
+        return jsonify({"status": "error", "message": f"Invalid model version: {model_version}"}), 400
+
+    # Check if already on this model
+    current_version = config.get("model.version", "full")
+    if transcription_engine and model_version == current_version:
+        return jsonify({"status": "error", "message": f"Model '{model_version}' is already loaded"}), 400
+
+    try:
+        # Set loading flag
+        engine_loading = True
+
+        # Unload current model if one is loaded
+        if transcription_engine is not None:
+            logger.info(f"Unloading current model: {current_version}")
+            socketio.emit(
+                "model_loading", {"status": "unloading", "model": current_version, "message": "Unloading current model..."}
+            )
+
+            # Clear the engine reference to allow garbage collection
+            del transcription_engine
+            transcription_engine = None
+
+            # Force garbage collection to free GPU memory
+            import gc
+
+            gc.collect()
+
+            # Clear CUDA cache if available
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    # MPS doesn't have an explicit cache clear, but gc.collect helps
+                    pass
+            except Exception as e:
+                logger.warning(f"Could not clear GPU cache: {e}")
+
+            logger.info("Current model unloaded successfully")
+
+        # Initialize new model in background thread
+        def load_new_model():
+            try:
+                initialize_engine(model_version)
+            except Exception as e:
+                global engine_loading
+                engine_loading = False
+                logger.error(f"Failed to load model in background: {e}")
+                socketio.emit("model_loading", {"status": "error", "message": f"Failed to load model: {str(e)}"})
+
+        thread = threading.Thread(target=load_new_model, daemon=False)
+        thread.start()
+
+        model_config = config.get_model_config(model_version)
+        return jsonify(
+            {
+                "status": "switching",
+                "message": f"Switching to {model_config.get('name')}...",
+                "model": model_config.get("name"),
+                "version": model_version,
+            }
+        )
+
+    except Exception as e:
+        engine_loading = False
+        logger.error(f"Failed to switch model: {e}")
+        return jsonify({"status": "error", "message": f"Failed to switch model: {str(e)}"}), 500
+
+
 @app.route("/api/upload", methods=["POST"])
 def upload_file():
     """

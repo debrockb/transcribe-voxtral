@@ -292,6 +292,7 @@ def get_available_models():
                     "name": model_info.get("name"),
                     "size_gb": model_info.get("size_gb"),
                     "format": model_info.get("format"),
+                    "backend": model_info.get("backend", "voxtral"),
                     "description": model_info.get("description"),
                     "memory_requirements": model_info.get("memory_requirements"),
                     "is_current": key == current_version,
@@ -1866,12 +1867,72 @@ def start_memory_monitor():
     logger.info("Memory monitoring started")
 
 
+def download_gguf_model(model_config, progress_callback=None):
+    """
+    Download a GGUF model from HuggingFace if not already cached.
+
+    Args:
+        model_config: Model configuration dict with gguf_filename
+        progress_callback: Optional callback for progress updates
+
+    Returns:
+        Path to the downloaded model file
+    """
+    gguf_config = config.get("gguf", {})
+    models_dir = Path(os.path.expanduser(gguf_config.get("models_dir", "~/.cache/whisper-gguf")))
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = model_config.get("gguf_filename")
+    if not filename:
+        raise ValueError("GGUF model config missing 'gguf_filename'")
+
+    model_path = models_dir / filename
+
+    # Check if model already exists
+    if model_path.exists():
+        logger.info(f"GGUF model already cached: {model_path}")
+        return str(model_path)
+
+    # Download from HuggingFace
+    download_base = gguf_config.get("download_url_base", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/")
+    url = f"{download_base}{filename}"
+
+    logger.info(f"Downloading GGUF model from: {url}")
+    if progress_callback:
+        progress_callback({"status": "downloading", "message": f"Downloading {filename}...", "progress": 10})
+
+    response = requests.get(url, stream=True, timeout=600)
+    response.raise_for_status()
+
+    total_size = int(response.headers.get("content-length", 0))
+    downloaded = 0
+
+    with open(model_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total_size > 0 and progress_callback:
+                    progress = 10 + int((downloaded / total_size) * 40)  # 10-50%
+                    progress_callback(
+                        {
+                            "status": "downloading",
+                            "message": f"Downloading {filename}... {downloaded // (1024 * 1024)}MB",
+                            "progress": progress,
+                        }
+                    )
+
+    logger.info(f"GGUF model downloaded to: {model_path}")
+    return str(model_path)
+
+
 def initialize_engine(model_version=None):
     """
     Initialize the transcription engine with specified model.
 
     Args:
-        model_version: Model version to load ('full' or 'quantized'). Uses config default if None.
+        model_version: Model version to load (e.g., 'full', 'quantized', 'whisper-base-gguf').
+                      Uses config default if None.
     """
     global transcription_engine, engine_loading
 
@@ -1882,9 +1943,13 @@ def initialize_engine(model_version=None):
 
         transcription_engine = MagicMock()
         transcription_engine.device = "cpu"
+        transcription_engine.backend = "mock"
         # Return proper dict structure instead of None to prevent TypeError
         transcription_engine.transcribe_file = MagicMock(
             return_value={"status": "success", "text": "Mock transcription", "language": "en"}
+        )
+        transcription_engine.get_device_info = MagicMock(
+            return_value={"device": "cpu", "backend": "mock"}
         )
         engine_loading = False
         return
@@ -1903,15 +1968,40 @@ def initialize_engine(model_version=None):
         model_id = model_config.get("id")
         model_name = model_config.get("name", "Unknown")
         quantization = model_config.get("quantization")
+        backend = model_config.get("backend", "voxtral")
 
         logger.info(f"Initializing transcription engine with model: {model_name} ({model_id})")
+        logger.info(f"Backend: {backend}")
         if quantization:
             logger.info(f"Using {quantization} quantization")
 
         # Emit loading progress via WebSocket
         socketio.emit("model_loading", {"status": "loading", "model": model_name, "message": f"Loading {model_name}..."})
 
-        transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
+        # Handle GGUF backend
+        if backend == "gguf":
+            # Import GGUF backend constants
+            from transcription_engine import BACKEND_GGUF
+
+            # Define progress callback for download
+            def download_progress(data):
+                socketio.emit("model_loading", {"status": "loading", "model": model_name, **data})
+
+            # Download model if needed
+            gguf_model_path = download_gguf_model(model_config, progress_callback=download_progress)
+
+            socketio.emit(
+                "model_loading", {"status": "loading", "model": model_name, "message": "Initializing Whisper model..."}
+            )
+
+            transcription_engine = TranscriptionEngine(
+                model_id=model_id,
+                backend=BACKEND_GGUF,
+                gguf_model_path=gguf_model_path,
+            )
+        else:
+            # Voxtral backend (default)
+            transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
 
         # Save the selected model version to config
         if model_version:
@@ -1921,7 +2011,7 @@ def initialize_engine(model_version=None):
             "model_loading", {"status": "loaded", "model": model_name, "message": f"{model_name} loaded successfully!"}
         )
 
-        logger.info(f"Engine initialized successfully with {model_name}")
+        logger.info(f"Engine initialized successfully with {model_name} (backend: {backend})")
         engine_loading = False
 
     except Exception as e:

@@ -3,6 +3,7 @@ Voxtral Transcription Engine
 Refactored version of transcribe_voxtral.py for web application use
 Supports progress callbacks and is designed for cross-platform compatibility (Windows & macOS)
 Features: Automatic language detection, FFmpeg conversion, audio normalization
+Supports multiple backends: Voxtral (HuggingFace) and GGUF (whisper.cpp)
 """
 
 import gc
@@ -12,7 +13,7 @@ import subprocess
 import tempfile
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Literal, Optional, Union
 
 # --- CRITICAL COMPATIBILITY FIX (MUST BE BEFORE TORCHAUDIO/SPEECHBRAIN IMPORT) ---
 # We patch torchaudio FIRST, so when SpeechBrain loads, it sees the function exists.
@@ -45,6 +46,11 @@ logger.setLevel(logging.DEBUG)  # Enable debug for language detection diagnostic
 # --- CONFIGURATION ---
 SUPPORTED_LANGS = {"en", "fr", "de", "es", "it", "nl", "pt", "hi", "pl", "ru", "ja", "ko", "zh", "ar"}
 DEFAULT_CHUNK_DURATION_S = 90  # 90s is optimal for multi-lingual switching
+GGUF_CHUNK_DURATION_S = 30  # 30s is optimal for whisper.cpp
+
+# Backend types
+BACKEND_VOXTRAL = "voxtral"
+BACKEND_GGUF = "gguf"
 
 
 def convert_to_clean_wav(input_path: str, output_path: str) -> bool:
@@ -88,7 +94,10 @@ def convert_to_clean_wav(input_path: str, output_path: str) -> bool:
 
 class TranscriptionEngine:
     """
-    Engine for transcribing audio files using the Mistral AI Voxtral model.
+    Engine for transcribing audio files using multiple backends:
+    - Voxtral: Mistral AI Voxtral model via HuggingFace transformers
+    - GGUF: Whisper models via whisper.cpp (pywhispercpp)
+
     Designed for cross-platform compatibility and real-time progress updates.
     Features: Automatic language detection, FFmpeg conversion, audio normalization.
     """
@@ -100,40 +109,78 @@ class TranscriptionEngine:
         progress_callback: Optional[Callable[[Dict], None]] = None,
         quantization: Optional[str] = None,
         auto_detect_language: bool = True,
+        backend: str = BACKEND_VOXTRAL,
+        gguf_model_path: Optional[str] = None,
     ):
         """
         Initialize the transcription engine.
 
         Args:
-            model_id: HuggingFace model identifier
+            model_id: HuggingFace model identifier (for Voxtral backend)
             device: Device to use (mps/cuda/cpu). Auto-detects if None.
             progress_callback: Function to call with progress updates
             quantization: Quantization mode ('4bit', '8bit', or None for full precision)
             auto_detect_language: Enable automatic language detection per chunk (requires speechbrain)
+            backend: Backend to use ('voxtral' or 'gguf')
+            gguf_model_path: Path to GGUF model file (required for GGUF backend)
         """
         self.model_id = model_id
         self.progress_callback = progress_callback
         self.quantization = quantization
         self.auto_detect_language = auto_detect_language
-        self.device = device or self._detect_device()
-        # IMPORTANT: MPS requires float32, only CUDA supports bfloat16
-        if self.device == "mps":
-            self.dtype = torch.float32
-        elif self.device == "cuda":
-            self.dtype = torch.bfloat16
+        self.backend = backend
+        self.gguf_model_path = gguf_model_path
+
+        # GGUF backend uses its own instance
+        self.gguf_backend = None
+
+        if backend == BACKEND_GGUF:
+            logger.info(f"Initializing GGUF backend with model: {gguf_model_path}")
+            self._load_gguf_backend()
+            self.device = "cpu"  # GGUF uses CPU (with potential Metal/CUDA acceleration internally)
+            self.dtype = None
+            self.processor = None
+            self.model = None
+            self.lang_classifier = None
         else:
-            self.dtype = torch.float32
+            # Voxtral backend
+            self.device = device or self._detect_device()
+            # IMPORTANT: MPS requires float32, only CUDA supports bfloat16
+            if self.device == "mps":
+                self.dtype = torch.float32
+            elif self.device == "cuda":
+                self.dtype = torch.bfloat16
+            else:
+                self.dtype = torch.float32
 
-        logger.info(f"Initializing TranscriptionEngine on device: {self.device}")
-        if quantization:
-            logger.info(f"Using {quantization} quantization")
+            logger.info(f"Initializing TranscriptionEngine on device: {self.device}")
+            if quantization:
+                logger.info(f"Using {quantization} quantization")
 
-        # Load model and processor
-        self.processor = None
-        self.model = None
-        self.lang_classifier = None
-        self._load_model()
-        self._load_language_classifier()
+            # Load model and processor
+            self.processor = None
+            self.model = None
+            self.lang_classifier = None
+            self._load_model()
+            self._load_language_classifier()
+
+    def _load_gguf_backend(self):
+        """Load the GGUF Whisper backend."""
+        if not self.gguf_model_path:
+            raise ValueError("gguf_model_path is required for GGUF backend")
+
+        try:
+            from gguf_backend import GGUFWhisperBackend
+
+            self.gguf_backend = GGUFWhisperBackend(
+                model_path=self.gguf_model_path,
+                progress_callback=self.progress_callback,
+            )
+        except ImportError as e:
+            raise ImportError(
+                f"GGUF backend dependencies not available: {e}. "
+                "Install with: pip install pywhispercpp"
+            )
 
     def _detect_device(self) -> str:
         """Auto-detect the best available device (MPS/CUDA/CPU)."""
@@ -504,6 +551,7 @@ class TranscriptionEngine:
         - FFmpeg pre-conversion for complex audio/video formats
         - Audio normalization for better recognition
         - Automatic language detection per chunk (if enabled)
+        - Supports multiple backends (Voxtral, GGUF)
 
         Args:
             input_audio_path: Path to input audio file
@@ -514,6 +562,15 @@ class TranscriptionEngine:
         Returns:
             Dictionary with transcription results and metadata
         """
+        # Delegate to GGUF backend if using that backend
+        if self.backend == BACKEND_GGUF and self.gguf_backend:
+            return self.gguf_backend.transcribe_file(
+                input_audio_path,
+                output_text_path,
+                language,
+                chunk_duration_s=GGUF_CHUNK_DURATION_S,
+            )
+
         temp_clean_wav = None
         try:
             # Convert paths to Path objects for cross-platform compatibility
@@ -737,6 +794,12 @@ class TranscriptionEngine:
 
     def get_device_info(self) -> Dict:
         """Get information about the current device and capabilities."""
+        # Delegate to GGUF backend if using that backend
+        if self.backend == BACKEND_GGUF and self.gguf_backend:
+            info = self.gguf_backend.get_device_info()
+            info["backend"] = BACKEND_GGUF
+            return info
+
         return {
             "device": self.device,
             "device_name": self.device.upper(),
@@ -746,6 +809,7 @@ class TranscriptionEngine:
             "cuda_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
             "auto_detect_language": self.auto_detect_language,
             "lang_classifier_loaded": self.lang_classifier is not None,
+            "backend": BACKEND_VOXTRAL,
         }
 
 

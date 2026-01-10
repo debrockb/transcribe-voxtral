@@ -744,6 +744,19 @@ body {
     font-weight: 600;
 }
 
+.model-card-badge-mac {
+    background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+}
+
+.model-card-mac {
+    border-left: 3px solid #007AFF;
+}
+
+.model-card-mac:hover {
+    border-color: #5856D6;
+    box-shadow: 0 8px 20px rgba(0, 122, 255, 0.2);
+}
+
 .model-card-title {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 1.3rem;

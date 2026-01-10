@@ -295,6 +295,8 @@ def get_available_models():
                     "backend": model_info.get("backend", "voxtral"),
                     "description": model_info.get("description"),
                     "memory_requirements": model_info.get("memory_requirements"),
+                    "platform": model_info.get("platform"),
+                    "device_preference": model_info.get("device_preference"),
                     "is_current": key == current_version,
                     "is_loaded": transcription_engine is not None and key == current_version,
                 }

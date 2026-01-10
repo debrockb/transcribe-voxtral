@@ -219,11 +219,20 @@ async function showModelSelectionModal() {
     // Render model cards
     elements.modelGrid.innerHTML = models.map((model, index) => {
         const isDefault = model.id === 'full';
+        const isMac = model.platform === 'mac';
         const isSelected = state.selectedModel.id === model.id;
 
+        // Build badge HTML
+        let badgeHtml = '';
+        if (isDefault) {
+            badgeHtml = '<div class="model-card-badge">Default</div>';
+        } else if (isMac) {
+            badgeHtml = '<div class="model-card-badge model-card-badge-mac">Mac</div>';
+        }
+
         return `
-            <div class="model-card ${isSelected ? 'selected' : ''}" data-model-id="${model.id}">
-                ${isDefault ? '<div class="model-card-badge">Default</div>' : ''}
+            <div class="model-card ${isSelected ? 'selected' : ''} ${isMac ? 'model-card-mac' : ''}" data-model-id="${model.id}">
+                ${badgeHtml}
                 <h3 class="model-card-title">${model.name}</h3>
                 <div class="model-card-size">${model.size_gb} GB</div>
                 <p class="model-card-description">${model.description}</p>

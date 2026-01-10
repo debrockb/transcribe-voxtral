@@ -31,6 +31,7 @@
           "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)"
         }
       },
+<<<<<<< HEAD
       "small-24b": {
         "id": "mistralai/Voxtral-Small-24B-2507",
         "name": "Voxtral Small 24B (Full)",
@@ -140,6 +141,40 @@
           "ram_inference": "~2 GB",
           "load_time_cpu": "< 30 seconds"
         }
+      },
+      "mac-24gb": {
+        "id": "mistralai/Voxtral-Mini-3B-2507",
+        "name": "Voxtral Mini 3B (Mac 24GB)",
+        "size_gb": 9.36,
+        "format": "safetensors",
+        "quantization": null,
+        "backend": "voxtral",
+        "device_preference": "mps",
+        "description": "Optimized for Apple Silicon Macs with 24GB unified memory - Uses Metal Performance Shaders for fast inference",
+        "memory_requirements": {
+          "disk": "9.36 GB",
+          "ram_loading": "12-16 GB unified memory",
+          "ram_inference": "10-12 GB unified memory",
+          "load_time": "2-5 minutes on Apple Silicon"
+        },
+        "platform": "mac"
+      },
+      "mac-64gb-large": {
+        "id": "mistralai/Voxtral-24B-2507",
+        "name": "Voxtral 24B (Mac Large)",
+        "size_gb": 48.0,
+        "format": "safetensors",
+        "quantization": null,
+        "backend": "voxtral",
+        "device_preference": "mps",
+        "description": "Large 24B model for high-end Macs - Requires 64GB+ unified memory (M2 Max/Ultra, M3 Max/Ultra)",
+        "memory_requirements": {
+          "disk": "48 GB",
+          "ram_loading": "64-96 GB unified memory",
+          "ram_inference": "50-60 GB unified memory",
+          "load_time": "5-10 minutes on Apple Silicon"
+        },
+        "platform": "mac"
       }
     }
   },

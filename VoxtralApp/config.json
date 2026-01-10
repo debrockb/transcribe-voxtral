@@ -8,6 +8,7 @@
         "size_gb": 9.36,
         "format": "safetensors",
         "quantization": null,
+        "backend": "voxtral",
         "description": "Full precision model - Best quality, requires ~20-30GB RAM during loading (CPU loading: 10-30 min)",
         "memory_requirements": {
           "disk": "9.36 GB",
@@ -22,14 +23,99 @@
         "size_gb": 9.36,
         "format": "safetensors",
         "quantization": "4bit",
+        "backend": "voxtral",
         "description": "4-bit quantized model - 75% less memory usage (NVIDIA GPU required, auto-falls back to full precision on Mac/CPU)",
         "memory_requirements": {
           "disk": "9.36 GB (quantized during load)",
           "ram_loading": "5-8 GB (NVIDIA GPU) / 20-30GB (Mac/CPU fallback)",
           "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)"
         }
+      },
+      "whisper-base-gguf": {
+        "id": "whisper-base",
+        "name": "Whisper Base (GGUF)",
+        "size_gb": 0.14,
+        "format": "gguf",
+        "quantization": null,
+        "backend": "gguf",
+        "gguf_filename": "ggml-base.bin",
+        "description": "Whisper Base via llama.cpp - Fast, lightweight, ~74MB model. Good for quick transcriptions.",
+        "memory_requirements": {
+          "disk": "142 MB",
+          "ram_loading": "~300 MB",
+          "ram_inference": "~200 MB",
+          "load_time_cpu": "< 5 seconds"
+        }
+      },
+      "whisper-small-gguf": {
+        "id": "whisper-small",
+        "name": "Whisper Small (GGUF)",
+        "size_gb": 0.47,
+        "format": "gguf",
+        "quantization": null,
+        "backend": "gguf",
+        "gguf_filename": "ggml-small.bin",
+        "description": "Whisper Small via llama.cpp - Good balance of speed and accuracy. ~244MB model.",
+        "memory_requirements": {
+          "disk": "466 MB",
+          "ram_loading": "~800 MB",
+          "ram_inference": "~500 MB",
+          "load_time_cpu": "< 10 seconds"
+        }
+      },
+      "whisper-medium-gguf": {
+        "id": "whisper-medium",
+        "name": "Whisper Medium (GGUF)",
+        "size_gb": 1.42,
+        "format": "gguf",
+        "quantization": null,
+        "backend": "gguf",
+        "gguf_filename": "ggml-medium.bin",
+        "description": "Whisper Medium via llama.cpp - Higher accuracy, moderate resource usage. ~769MB model.",
+        "memory_requirements": {
+          "disk": "1.42 GB",
+          "ram_loading": "~2 GB",
+          "ram_inference": "~1.5 GB",
+          "load_time_cpu": "< 30 seconds"
+        }
+      },
+      "whisper-large-v3-gguf": {
+        "id": "whisper-large-v3",
+        "name": "Whisper Large v3 (GGUF)",
+        "size_gb": 2.87,
+        "format": "gguf",
+        "quantization": null,
+        "backend": "gguf",
+        "gguf_filename": "ggml-large-v3.bin",
+        "description": "Whisper Large v3 via llama.cpp - Best accuracy, requires more resources. ~1.5GB model.",
+        "memory_requirements": {
+          "disk": "2.87 GB",
+          "ram_loading": "~4 GB",
+          "ram_inference": "~3 GB",
+          "load_time_cpu": "~1 minute"
+        }
+      },
+      "whisper-large-v3-turbo-gguf": {
+        "id": "whisper-large-v3-turbo",
+        "name": "Whisper Large v3 Turbo (GGUF)",
+        "size_gb": 1.56,
+        "format": "gguf",
+        "quantization": null,
+        "backend": "gguf",
+        "gguf_filename": "ggml-large-v3-turbo.bin",
+        "description": "Whisper Large v3 Turbo via llama.cpp - Fast and accurate, distilled model. ~809MB.",
+        "memory_requirements": {
+          "disk": "1.56 GB",
+          "ram_loading": "~2.5 GB",
+          "ram_inference": "~2 GB",
+          "load_time_cpu": "< 30 seconds"
+        }
       }
     }
+  },
+  "gguf": {
+    "models_dir": "~/.cache/whisper-gguf",
+    "download_url_base": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
   },
   "app": {
     "version": "1.1.13",

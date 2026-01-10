@@ -44,6 +44,10 @@ sys.modules["speechbrain.inference"] = MagicMock()
 sys.modules["speechbrain.inference.classifiers"] = MagicMock()
 sys.modules["psutil"] = MagicMock()
 
+# Mock pywhispercpp for GGUF backend testing
+sys.modules["pywhispercpp"] = MagicMock()
+sys.modules["pywhispercpp.model"] = MagicMock()
+
 # Configure torch mocks
 sys.modules["torch"].cuda.is_available = MagicMock(return_value=False)
 sys.modules["torch"].backends.mps.is_available = MagicMock(return_value=False)

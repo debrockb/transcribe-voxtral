@@ -12,6 +12,9 @@ transformers
 bitsandbytes  # For model quantization
 speechbrain  # For automatic language detection (optional but recommended)
 
+# GGUF/Whisper.cpp backend (optional - for Whisper GGUF models)
+pywhispercpp  # Python bindings for whisper.cpp
+
 # Web application dependencies
 Flask==3.0.0
 Flask-SocketIO==5.3.5

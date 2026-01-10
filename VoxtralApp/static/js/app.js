@@ -56,7 +56,8 @@ const elements = {
     initializeModelBtn: document.getElementById('initializeModelBtn'),
     modelLoadingOverlay: document.getElementById('modelLoadingOverlay'),
     modelLoadingTitle: document.getElementById('modelLoadingTitle'),
-    modelLoadingMessage: document.getElementById('modelLoadingMessage')
+    modelLoadingMessage: document.getElementById('modelLoadingMessage'),
+    modelBadge: document.getElementById('modelBadge')
 };
 
 // Initialize application
@@ -70,6 +71,12 @@ async function init() {
         await showModelSelectionModal();
     } else {
         state.modelLoaded = true;
+
+        // Update model badge with loaded model name
+        if (elements.modelBadge && modelStatus.model) {
+            elements.modelBadge.textContent = modelStatus.model;
+        }
+
         loadLanguages();
         startMemoryMonitoring();
         checkForUpdates();
@@ -316,6 +323,11 @@ function handleModelLoading(data) {
         // Hide modal
         elements.modelModal.style.display = 'none';
         elements.modelLoadingOverlay.style.display = 'none';
+
+        // Update the model badge in hero section
+        if (elements.modelBadge && data.model) {
+            elements.modelBadge.textContent = data.model;
+        }
 
         showToast(`${data.model} loaded successfully!`, 'success');
 

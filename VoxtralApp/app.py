@@ -176,6 +176,7 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
                         "duration": result["duration_minutes"],
                         "word_count": result["word_count"],
                         "char_count": result["char_count"],
+                        "confidence": result.get("confidence", 0.0),
                         "completed_at": datetime.now().isoformat(),
                     }
                 )
@@ -187,6 +188,7 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
                         "transcript": result["transcript"],  # Send once via WebSocket then discard
                         "duration": result["duration_minutes"],
                         "word_count": result["word_count"],
+                        "confidence": result.get("confidence", 0.0),
                     },
                 )
             else:
@@ -613,6 +615,7 @@ def get_transcript(job_id):
             "duration": job.get("duration", 0),
             "word_count": job.get("word_count", 0),
             "char_count": job.get("char_count", 0),
+            "confidence": job.get("confidence", 0.0),
         }
     )
 

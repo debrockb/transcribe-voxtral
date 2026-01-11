@@ -27,6 +27,10 @@ psutil>=5.9.0         # Memory and system monitoring
 packaging>=23.0       # Version comparison for updates
 requests>=2.31.0      # GitHub API for update checking
 
+# MLX backend for Apple Silicon (optional - significantly faster on M1/M2/M3)
+# mlx-voxtral  # Uncomment on Apple Silicon for native MLX inference
+# Uses mzbac/voxtral-mini-3b-4bit-mixed model (4-bit quantized)
+
 # Video conversion (optional - install if processing video files)
 # moviepy==1.0.3
 # Note: moviepy requires ffmpeg to be installed on the system

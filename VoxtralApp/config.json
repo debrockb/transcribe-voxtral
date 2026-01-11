@@ -31,7 +31,6 @@
           "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)"
         }
       },
-<<<<<<< HEAD
       "small-24b": {
         "id": "mistralai/Voxtral-Small-24B-2507",
         "name": "Voxtral Small 24B (Full)",
@@ -60,6 +59,38 @@
           "ram_loading": "16-20 GB (NVIDIA GPU)",
           "ram_inference": "14-16 GB (NVIDIA GPU)",
           "load_time_cpu": "Not supported - requires NVIDIA GPU with CUDA"
+        }
+      },
+      "mlx-mini-3b-4bit": {
+        "id": "mzbac/voxtral-mini-3b-4bit-mixed",
+        "name": "Voxtral Mini 3B MLX (4-bit)",
+        "size_gb": 3.2,
+        "format": "mlx",
+        "quantization": "4bit",
+        "backend": "mlx",
+        "platform": "mac",
+        "description": "MLX-optimized 4-bit model for Apple Silicon - Fast inference on Mac M1/M2/M3/M4 (25-30x faster than PyTorch)",
+        "memory_requirements": {
+          "disk": "3.2 GB",
+          "ram_loading": "4-5 GB unified memory",
+          "ram_inference": "4-5 GB unified memory",
+          "load_time": "< 1 minute on Apple Silicon"
+        }
+      },
+      "mlx-mini-3b-8bit": {
+        "id": "mzbac/voxtral-mini-3b-8bit",
+        "name": "Voxtral Mini 3B MLX (8-bit)",
+        "size_gb": 5.3,
+        "format": "mlx",
+        "quantization": "8bit",
+        "backend": "mlx",
+        "platform": "mac",
+        "description": "MLX-optimized 8-bit model for Apple Silicon - Better quality, fast inference on Mac M1/M2/M3/M4",
+        "memory_requirements": {
+          "disk": "5.3 GB",
+          "ram_loading": "6-7 GB unified memory",
+          "ram_inference": "6-7 GB unified memory",
+          "load_time": "< 2 minutes on Apple Silicon"
         }
       },
       "whisper-base-gguf": {

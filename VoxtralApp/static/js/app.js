@@ -11,7 +11,11 @@ const state = {
     languages: [],
     modelLoaded: false,
     availableModels: [],
-    selectedModel: null
+    selectedModel: null,
+    // Progress tracking for ETA
+    progressStartTime: null,
+    lastProgressUpdate: null,
+    progressHistory: []
 };
 
 // DOM Elements
@@ -30,6 +34,7 @@ const elements = {
     progressPercentage: document.getElementById('progressPercentage'),
     progressFill: document.getElementById('progressFill'),
     progressDetails: document.getElementById('progressDetails'),
+    progressEta: document.getElementById('progressEta'),
     transcriptSection: document.getElementById('transcriptSection'),
     transcriptContent: document.getElementById('transcriptContent'),
     wordCount: document.getElementById('wordCount'),
@@ -778,6 +783,21 @@ function handleProgressUpdate(data) {
 
     const progress = data.progress || 0;
     const message = data.message || 'Processing...';
+    const now = Date.now();
+
+    // Initialize progress tracking on first update
+    if (!state.progressStartTime || progress <= 1) {
+        state.progressStartTime = now;
+        state.progressHistory = [];
+    }
+
+    // Track progress history for ETA calculation
+    state.progressHistory.push({ progress, time: now });
+    // Keep only last 10 data points for smoothing
+    if (state.progressHistory.length > 10) {
+        state.progressHistory.shift();
+    }
+    state.lastProgressUpdate = now;
 
     elements.progressPercentage.textContent = progress + '%';
     elements.progressFill.style.width = progress + '%';
@@ -785,12 +805,72 @@ function handleProgressUpdate(data) {
 
     if (data.current_chunk && data.total_chunks) {
         elements.progressDetails.textContent =
-            `${message} (Chunk ${data.current_chunk}/${data.total_chunks})`;
+            `Chunk ${data.current_chunk} of ${data.total_chunks}`;
     } else {
         elements.progressDetails.textContent = message;
     }
 
+    // Calculate and display ETA
+    updateProgressEta(progress);
+
     console.log('Progress:', progress + '%', message);
+}
+
+// Calculate and update estimated time remaining
+function updateProgressEta(currentProgress) {
+    if (!elements.progressEta) return;
+
+    // Need at least 2 data points and 5% progress for meaningful estimate
+    if (state.progressHistory.length < 2 || currentProgress < 5) {
+        elements.progressEta.classList.remove('visible');
+        return;
+    }
+
+    // Calculate rate from progress history (smoothed)
+    const oldest = state.progressHistory[0];
+    const newest = state.progressHistory[state.progressHistory.length - 1];
+    const progressDelta = newest.progress - oldest.progress;
+    const timeDelta = newest.time - oldest.time;
+
+    if (progressDelta <= 0 || timeDelta <= 0) {
+        elements.progressEta.classList.remove('visible');
+        return;
+    }
+
+    // Calculate remaining time in milliseconds
+    const progressPerMs = progressDelta / timeDelta;
+    const remainingProgress = 100 - currentProgress;
+    const remainingMs = remainingProgress / progressPerMs;
+
+    // Format the remaining time
+    const etaText = formatTimeRemaining(remainingMs);
+    elements.progressEta.textContent = etaText;
+    elements.progressEta.classList.add('visible');
+}
+
+// Format milliseconds into readable time remaining
+function formatTimeRemaining(ms) {
+    const seconds = Math.round(ms / 1000);
+
+    if (seconds < 5) {
+        return 'Almost done';
+    } else if (seconds < 60) {
+        return `${seconds}s remaining`;
+    } else if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        if (secs === 0) {
+            return `${mins}m remaining`;
+        }
+        return `${mins}m ${secs}s remaining`;
+    } else {
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        if (mins === 0) {
+            return `${hours}h remaining`;
+        }
+        return `${hours}h ${mins}m remaining`;
+    }
 }
 
 // Handle transcription complete
@@ -799,11 +879,19 @@ function handleTranscriptionComplete(data) {
 
     console.log('Transcription complete!');
 
+    // Reset progress tracking
+    state.progressStartTime = null;
+    state.progressHistory = [];
+
     // Update UI
     elements.progressPercentage.textContent = '100%';
     elements.progressFill.style.width = '100%';
     elements.progressStatus.textContent = 'Complete';
-    elements.progressDetails.textContent = 'Transcription completed successfully!';
+    elements.progressDetails.textContent = 'Transcription completed successfully';
+    if (elements.progressEta) {
+        elements.progressEta.textContent = '';
+        elements.progressEta.classList.remove('visible');
+    }
 
     // Display transcript
     displayTranscript(data);
@@ -821,9 +909,17 @@ function handleTranscriptionError(data) {
 
     console.error('Transcription error:', data.error);
 
+    // Reset progress tracking
+    state.progressStartTime = null;
+    state.progressHistory = [];
+
     elements.progressStatus.textContent = 'Error';
-    elements.progressDetails.textContent = 'Error: ' + data.error;
+    elements.progressDetails.textContent = data.error;
     elements.progressFill.style.width = '0%';
+    if (elements.progressEta) {
+        elements.progressEta.textContent = '';
+        elements.progressEta.classList.remove('visible');
+    }
 
     elements.transcribeBtn.disabled = false;
     elements.transcribeBtn.textContent = 'Start Transcription';
@@ -958,6 +1054,13 @@ function clearTranscript() {
     elements.transcriptSection.style.display = 'none';
     elements.progressSection.style.display = 'none';
     state.currentJobId = null;
+    // Reset progress tracking
+    state.progressStartTime = null;
+    state.progressHistory = [];
+    if (elements.progressEta) {
+        elements.progressEta.textContent = '';
+        elements.progressEta.classList.remove('visible');
+    }
 }
 
 // Show toast notification

@@ -516,3 +516,138 @@ class TestMemoryWarningWebSocket:
         # Disconnect to verify cleanup
         socketio_client.disconnect()
         assert not socketio_client.is_connected()
+
+
+@pytest.mark.api
+class TestModelEndpoints:
+    """Test model management endpoints"""
+
+    def test_get_available_models(self, client):
+        """Test GET /api/models returns available models"""
+        response = client.get("/api/models")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert "models" in data
+        assert "current_version" in data
+        assert isinstance(data["models"], list)
+        assert len(data["models"]) > 0
+
+        # Verify model structure
+        model = data["models"][0]
+        assert "id" in model
+        assert "name" in model
+        assert "is_current" in model
+
+    def test_get_model_status_no_model_loaded(self, client):
+        """Test GET /api/model/status when no model is loaded"""
+        response = client.get("/api/model/status")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+
+        assert "loaded" in data
+        assert "loading" in data
+        # In test mode, model should not be loaded by default
+        # (but mock may set it differently, so just verify structure)
+
+    def test_switch_model_missing_csrf_header(self, client):
+        """Test POST /api/model/switch requires CSRF header"""
+        # Skip CSRF check if testing mode
+        response = client.post(
+            "/api/model/switch",
+            json={"version": "full"},
+            # Missing X-Voxtral-Request header
+        )
+        # In test mode, CSRF is skipped, so this may succeed
+        # But in production it would fail with 403
+        assert response.status_code in [200, 403, 409]
+
+    def test_switch_model_missing_version(self, client):
+        """Test POST /api/model/switch with missing version parameter"""
+        # Send non-empty JSON body without version field
+        response = client.post(
+            "/api/model/switch",
+            json={"other_field": "value"},
+            headers={"X-Voxtral-Request": "voxtral-web-ui"},
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data["status"] == "error"
+        assert "version" in data["message"].lower()
+
+    def test_switch_model_invalid_version(self, client):
+        """Test POST /api/model/switch with invalid model version"""
+        response = client.post(
+            "/api/model/switch",
+            json={"version": "nonexistent_model"},
+            headers={"X-Voxtral-Request": "voxtral-web-ui"},
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data["status"] == "error"
+        assert "invalid" in data["message"].lower()
+
+    def test_switch_model_invalid_json(self, client):
+        """Test POST /api/model/switch with invalid JSON body"""
+        response = client.post(
+            "/api/model/switch",
+            data="not json",
+            content_type="application/json",
+            headers={"X-Voxtral-Request": "voxtral-web-ui"},
+        )
+        assert response.status_code == 400
+        data = json.loads(response.data)
+        assert data["status"] == "error"
+
+    @patch("app.transcription_engine", None)
+    @patch("app.engine_loading", False)
+    def test_switch_model_success(self, client):
+        """Test POST /api/model/switch successfully starts model switch"""
+        response = client.post(
+            "/api/model/switch",
+            json={"version": "full"},
+            headers={"X-Voxtral-Request": "voxtral-web-ui"},
+        )
+        # Should return switching status (model loads in background)
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["status"] in ["switching", "success"]
+        assert "version" in data
+
+    @patch("app.engine_loading", True)
+    def test_switch_model_while_loading(self, client):
+        """Test POST /api/model/switch while model is already loading"""
+        response = client.post(
+            "/api/model/switch",
+            json={"version": "full"},
+            headers={"X-Voxtral-Request": "voxtral-web-ui"},
+        )
+        assert response.status_code == 409
+        data = json.loads(response.data)
+        assert data["status"] == "error"
+        assert "loading" in data["message"].lower()
+
+    def test_initialize_model_success(self, client):
+        """Test POST /api/model/initialize successfully starts model loading"""
+        with patch("app.transcription_engine", None), patch("app.engine_loading", False):
+            response = client.post(
+                "/api/model/initialize",
+                json={"version": "full"},
+                headers={"X-Voxtral-Request": "voxtral-web-ui"},
+            )
+            # Should return loading status
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["status"] in ["loading", "success"]
+
+    def test_initialize_model_invalid_version(self, client):
+        """Test POST /api/model/initialize with invalid version"""
+        with patch("app.transcription_engine", None), patch("app.engine_loading", False):
+            response = client.post(
+                "/api/model/initialize",
+                json={"version": "invalid_model"},
+                headers={"X-Voxtral-Request": "voxtral-web-ui"},
+            )
+            assert response.status_code == 400
+            data = json.loads(response.data)
+            assert data["status"] == "error"

@@ -176,7 +176,6 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
                         "duration": result["duration_minutes"],
                         "word_count": result["word_count"],
                         "char_count": result["char_count"],
-                        "confidence": result.get("confidence", 0.0),
                         "completed_at": datetime.now().isoformat(),
                     }
                 )
@@ -188,7 +187,6 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
                         "transcript": result["transcript"],  # Send once via WebSocket then discard
                         "duration": result["duration_minutes"],
                         "word_count": result["word_count"],
-                        "confidence": result.get("confidence", 0.0),
                     },
                 )
             else:
@@ -292,11 +290,8 @@ def get_available_models():
                     "name": model_info.get("name"),
                     "size_gb": model_info.get("size_gb"),
                     "format": model_info.get("format"),
-                    "backend": model_info.get("backend", "voxtral"),
                     "description": model_info.get("description"),
                     "memory_requirements": model_info.get("memory_requirements"),
-                    "platform": model_info.get("platform"),
-                    "device_preference": model_info.get("device_preference"),
                     "is_current": key == current_version,
                     "is_loaded": transcription_engine is not None and key == current_version,
                 }
@@ -388,7 +383,10 @@ def initialize_model():
 @app.route("/api/model/switch", methods=["POST"])
 def switch_model():
     """
-    Switch to a different model by unloading current model and loading a new one.
+    Switch to a different model version.
+
+    Unloads the current model (if any) and loads the specified model version.
+    Cannot switch while a transcription is in progress.
 
     SECURITY: Protected by custom header validation to prevent CSRF attacks.
     """
@@ -396,61 +394,58 @@ def switch_model():
 
     # Validate CSRF protection
     if not validate_csrf_protection():
-        return jsonify({"status": "error", "message": "Forbidden: Invalid request origin"}), 403
+        return error_response("Forbidden: Invalid request origin", 403)
 
-    # Check if engine is currently loading
-    if engine_loading:
-        return jsonify({"status": "error", "message": "Model is currently loading. Please wait."}), 409
-
-    # Check if a transcription is in progress
-    if engine_lock.locked():
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "Cannot switch models while a transcription is in progress. Please wait for it to complete.",
-                }
-            ),
+    # Check if a transcription is currently running
+    if not engine_lock.acquire(blocking=False):
+        return error_response(
+            "Cannot switch models while a transcription is in progress. Please wait for it to complete.",
             409,
         )
+    engine_lock.release()
+
+    # Check if model is currently loading
+    if engine_loading:
+        return error_response("Model is currently loading. Please wait.", 409)
 
     # Validate JSON request body
     data = request.get_json(silent=True)
     if not data:
-        return jsonify({"status": "error", "message": "Invalid or missing JSON request body"}), 400
+        return error_response("Invalid or missing JSON request body", 400)
 
     model_version = data.get("version")
     if not model_version:
-        return jsonify({"status": "error", "message": "Model version is required"}), 400
+        return error_response("Missing 'version' parameter", 400)
 
     # Validate model version
     available_models = config.get_all_models()
     if model_version not in available_models:
-        return jsonify({"status": "error", "message": f"Invalid model version: {model_version}"}), 400
+        return error_response(f"Invalid model version: {model_version}. Available: {list(available_models.keys())}", 400)
 
-    # Check if already on this model
+    # Check if already using this model
     current_version = config.get("model.version", "full")
-    if transcription_engine and model_version == current_version:
-        return jsonify({"status": "error", "message": f"Model '{model_version}' is already loaded"}), 400
+    if transcription_engine is not None and model_version == current_version:
+        return success_response(
+            {"version": model_version, "already_loaded": True},
+            f"Model '{model_version}' is already loaded.",
+        )
 
     try:
         # Set loading flag
         engine_loading = True
 
-        # Unload current model if one is loaded
+        # Unload current model if exists
         if transcription_engine is not None:
-            logger.info(f"Unloading current model: {current_version}")
+            logger.info(f"Unloading current model ({current_version})...")
             socketio.emit(
-                "model_loading", {"status": "unloading", "model": current_version, "message": "Unloading current model..."}
+                "model_loading",
+                {"status": "unloading", "model": current_version, "message": f"Unloading {current_version}..."},
             )
 
-            # Clear the engine reference to allow garbage collection
-            del transcription_engine
+            # Clear the engine reference
             transcription_engine = None
 
             # Force garbage collection to free GPU memory
-            import gc
-
             gc.collect()
 
             # Clear CUDA cache if available
@@ -459,16 +454,17 @@ def switch_model():
 
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
+                    logger.info("CUDA cache cleared")
                 elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                    # MPS doesn't have an explicit cache clear, but gc.collect helps
-                    pass
-            except Exception as e:
-                logger.warning(f"Could not clear GPU cache: {e}")
+                    # MPS doesn't have empty_cache, but gc.collect helps
+                    logger.info("MPS memory cleanup triggered via gc.collect")
+            except ImportError:
+                pass
 
-            logger.info("Current model unloaded successfully")
+            logger.info("Previous model unloaded")
 
-        # Initialize new model in background thread
-        def load_new_model():
+        # Load new model in background thread
+        def load_model():
             try:
                 initialize_engine(model_version)
             except Exception as e:
@@ -477,7 +473,7 @@ def switch_model():
                 logger.error(f"Failed to load model in background: {e}")
                 socketio.emit("model_loading", {"status": "error", "message": f"Failed to load model: {str(e)}"})
 
-        thread = threading.Thread(target=load_new_model, daemon=False)
+        thread = threading.Thread(target=load_model, daemon=False)
         thread.start()
 
         model_config = config.get_model_config(model_version)
@@ -487,13 +483,14 @@ def switch_model():
                 "message": f"Switching to {model_config.get('name')}...",
                 "model": model_config.get("name"),
                 "version": model_version,
+                "previous_version": current_version if transcription_engine is None else None,
             }
         )
 
     except Exception as e:
         engine_loading = False
         logger.error(f"Failed to switch model: {e}")
-        return jsonify({"status": "error", "message": f"Failed to switch model: {str(e)}"}), 500
+        return error_response(f"Failed to switch model: {str(e)}", 500)
 
 
 @app.route("/api/upload", methods=["POST"])
@@ -729,7 +726,6 @@ def get_transcript(job_id):
             "duration": job.get("duration", 0),
             "word_count": job.get("word_count", 0),
             "char_count": job.get("char_count", 0),
-            "confidence": job.get("confidence", 0.0),
         }
     )
 
@@ -1869,72 +1865,12 @@ def start_memory_monitor():
     logger.info("Memory monitoring started")
 
 
-def download_gguf_model(model_config, progress_callback=None):
-    """
-    Download a GGUF model from HuggingFace if not already cached.
-
-    Args:
-        model_config: Model configuration dict with gguf_filename
-        progress_callback: Optional callback for progress updates
-
-    Returns:
-        Path to the downloaded model file
-    """
-    gguf_config = config.get("gguf", {})
-    models_dir = Path(os.path.expanduser(gguf_config.get("models_dir", "~/.cache/whisper-gguf")))
-    models_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = model_config.get("gguf_filename")
-    if not filename:
-        raise ValueError("GGUF model config missing 'gguf_filename'")
-
-    model_path = models_dir / filename
-
-    # Check if model already exists
-    if model_path.exists():
-        logger.info(f"GGUF model already cached: {model_path}")
-        return str(model_path)
-
-    # Download from HuggingFace
-    download_base = gguf_config.get("download_url_base", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/")
-    url = f"{download_base}{filename}"
-
-    logger.info(f"Downloading GGUF model from: {url}")
-    if progress_callback:
-        progress_callback({"status": "downloading", "message": f"Downloading {filename}...", "progress": 10})
-
-    response = requests.get(url, stream=True, timeout=600)
-    response.raise_for_status()
-
-    total_size = int(response.headers.get("content-length", 0))
-    downloaded = 0
-
-    with open(model_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0 and progress_callback:
-                    progress = 10 + int((downloaded / total_size) * 40)  # 10-50%
-                    progress_callback(
-                        {
-                            "status": "downloading",
-                            "message": f"Downloading {filename}... {downloaded // (1024 * 1024)}MB",
-                            "progress": progress,
-                        }
-                    )
-
-    logger.info(f"GGUF model downloaded to: {model_path}")
-    return str(model_path)
-
-
 def initialize_engine(model_version=None):
     """
     Initialize the transcription engine with specified model.
 
     Args:
-        model_version: Model version to load (e.g., 'full', 'quantized', 'whisper-base-gguf').
-                      Uses config default if None.
+        model_version: Model version to load ('full' or 'quantized'). Uses config default if None.
     """
     global transcription_engine, engine_loading
 
@@ -1945,13 +1881,9 @@ def initialize_engine(model_version=None):
 
         transcription_engine = MagicMock()
         transcription_engine.device = "cpu"
-        transcription_engine.backend = "mock"
         # Return proper dict structure instead of None to prevent TypeError
         transcription_engine.transcribe_file = MagicMock(
             return_value={"status": "success", "text": "Mock transcription", "language": "en"}
-        )
-        transcription_engine.get_device_info = MagicMock(
-            return_value={"device": "cpu", "backend": "mock"}
         )
         engine_loading = False
         return
@@ -1970,40 +1902,15 @@ def initialize_engine(model_version=None):
         model_id = model_config.get("id")
         model_name = model_config.get("name", "Unknown")
         quantization = model_config.get("quantization")
-        backend = model_config.get("backend", "voxtral")
 
         logger.info(f"Initializing transcription engine with model: {model_name} ({model_id})")
-        logger.info(f"Backend: {backend}")
         if quantization:
             logger.info(f"Using {quantization} quantization")
 
         # Emit loading progress via WebSocket
         socketio.emit("model_loading", {"status": "loading", "model": model_name, "message": f"Loading {model_name}..."})
 
-        # Handle GGUF backend
-        if backend == "gguf":
-            # Import GGUF backend constants
-            from transcription_engine import BACKEND_GGUF
-
-            # Define progress callback for download
-            def download_progress(data):
-                socketio.emit("model_loading", {"status": "loading", "model": model_name, **data})
-
-            # Download model if needed
-            gguf_model_path = download_gguf_model(model_config, progress_callback=download_progress)
-
-            socketio.emit(
-                "model_loading", {"status": "loading", "model": model_name, "message": "Initializing Whisper model..."}
-            )
-
-            transcription_engine = TranscriptionEngine(
-                model_id=model_id,
-                backend=BACKEND_GGUF,
-                gguf_model_path=gguf_model_path,
-            )
-        else:
-            # Voxtral backend (default)
-            transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
+        transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
 
         # Save the selected model version to config
         if model_version:
@@ -2013,7 +1920,7 @@ def initialize_engine(model_version=None):
             "model_loading", {"status": "loaded", "model": model_name, "message": f"{model_name} loaded successfully!"}
         )
 
-        logger.info(f"Engine initialized successfully with {model_name} (backend: {backend})")
+        logger.info(f"Engine initialized successfully with {model_name}")
         engine_loading = False
 
     except Exception as e:

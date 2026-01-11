@@ -28,6 +28,22 @@
           "ram_loading": "5-8 GB (NVIDIA GPU) / 20-30GB (Mac/CPU fallback)",
           "ram_inference": "3-4 GB (NVIDIA GPU) / 10-12GB (Mac/CPU fallback)"
         }
+      },
+      "mlx-mini-3b-4bit": {
+        "id": "mzbac/voxtral-mini-3b-4bit-mixed",
+        "name": "Voxtral Mini 3B MLX (4-bit)",
+        "backend": "mlx",
+        "platform": "mac",
+        "quantization": "4bit",
+        "description": "MLX-optimized 4-bit model for Apple Silicon - Fast inference on Mac M1/M2/M3/M4"
+      },
+      "mlx-mini-3b-8bit": {
+        "id": "mzbac/voxtral-mini-3b-8bit",
+        "name": "Voxtral Mini 3B MLX (8-bit)",
+        "backend": "mlx",
+        "platform": "mac",
+        "quantization": "8bit",
+        "description": "MLX-optimized 8-bit model for Apple Silicon - Better quality, fast inference on Mac M1/M2/M3/M4"
       }
     }
   },

@@ -36,13 +36,14 @@ if errorlevel 1 (
 
 echo.
 echo Starting web server...
-echo Access the application at: http://localhost:8000
+echo Finding available port (default: 8000)...
 echo.
 echo Press Ctrl+C to stop the server
 echo ============================================
 echo.
 
 REM Start the Flask application
+REM The app will automatically find an available port and open the browser
 %PYTHON_BIN% app.py
 
 REM Only pause if there was an error (allows update to proceed on clean exit)

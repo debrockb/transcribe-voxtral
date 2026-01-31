@@ -9,17 +9,44 @@ import logging
 import os
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import uuid
+import webbrowser
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
 import psutil
+
+
+def find_available_port(start_port: int = 8000, max_attempts: int = 100) -> int:
+    """
+    Find an available port starting from start_port.
+
+    Args:
+        start_port: Port number to start searching from (default 8000)
+        max_attempts: Maximum number of ports to try (default 100)
+
+    Returns:
+        An available port number
+
+    Raises:
+        RuntimeError: If no available port is found within max_attempts
+    """
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"Could not find an available port in range {start_port}-{start_port + max_attempts - 1}")
 import requests
 from flask import Flask, jsonify, render_template, request, send_file, session
 from flask_cors import CORS
@@ -59,12 +86,29 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True  # XSS protection
 
 # Enable CORS and SocketIO - restrict to localhost only to prevent CSRF attacks
 # from malicious websites the user might visit while the app is running
+# Base origins for common ports, will be extended dynamically if a different port is used
 ALLOWED_ORIGINS = [
     "http://localhost:5000",
     "http://127.0.0.1:5000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
+
+
+def get_allowed_origins(port: int) -> list:
+    """Get CORS allowed origins including the specified port."""
+    origins = ALLOWED_ORIGINS.copy()
+    # Add the actual port if not already in the list
+    localhost_origin = f"http://localhost:{port}"
+    loopback_origin = f"http://127.0.0.1:{port}"
+    if localhost_origin not in origins:
+        origins.append(localhost_origin)
+    if loopback_origin not in origins:
+        origins.append(loopback_origin)
+    return origins
+
+
+# Initialize CORS with base origins (will be updated at runtime if needed)
 CORS(app, origins=ALLOWED_ORIGINS)
 # Use threading mode explicitly - compatible with all environments without extra dependencies
 socketio = SocketIO(app, async_mode="threading", cors_allowed_origins=ALLOWED_ORIGINS)
@@ -2136,10 +2180,35 @@ if __name__ == "__main__":
 
     # Start Flask-SocketIO server
     # Using port 8000 as port 5000 is often used by macOS AirPlay Receiver
-    port = int(os.environ.get("PORT", 8000))
+    preferred_port = int(os.environ.get("PORT", 8000))
+
+    # Find an available port, starting from the preferred port
+    try:
+        port = find_available_port(preferred_port)
+        if port != preferred_port:
+            logger.info(f"Port {preferred_port} is in use, using port {port} instead")
+    except RuntimeError as e:
+        logger.error(f"Failed to find available port: {e}")
+        sys.exit(1)
+
+    # Update CORS origins to include the actual port being used
+    actual_origins = get_allowed_origins(port)
+    app.config["CORS_ORIGINS"] = actual_origins
+    socketio.server.cors_allowed_origins = actual_origins
+
     logger.info(f"Starting Voxtral Web Application on port {port}...")
     logger.info(f"Access the application at: http://localhost:{port}")
     logger.info("Model will be loaded after user selection in the web UI")
+
+    # Open browser automatically after a short delay (gives server time to start)
+    # Only open if not in a headless/test environment
+    if not os.environ.get("TESTING") and not os.environ.get("NO_BROWSER"):
+        def open_browser():
+            time.sleep(2)  # Wait for server to start
+            url = f"http://localhost:{port}"
+            logger.info(f"Opening browser at {url}")
+            webbrowser.open(url)
+        threading.Thread(target=open_browser, daemon=True).start()
 
     # SECURITY: Bind to 127.0.0.1 (localhost) instead of 0.0.0.0 to prevent network access
     # This ensures only the local machine can access the server, preventing:

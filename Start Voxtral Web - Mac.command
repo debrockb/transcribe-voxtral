@@ -6,11 +6,8 @@
 cd "$(dirname "$0")/VoxtralApp"
 
 echo "🎙️  Starting Voxtral Web Application..."
-echo "🌐 Browser will open automatically in 8 seconds..."
+echo "🌐 Browser will open automatically when server is ready..."
 echo ""
 
-# Open browser after delay (in background)
-(sleep 8 && open http://localhost:8000) &
-
-# Run the startup script
+# Run the startup script (browser will be opened by Python after port is determined)
 ./start_web.sh

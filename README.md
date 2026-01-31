@@ -87,62 +87,44 @@ flowchart TD
 
 ## Quick Start
 
-### 1. Setup
+### macOS (Easiest)
 
-Navigate to the VoxtralApp directory:
+**First time:** Double-click `Start Voxtral Web - Mac.command` - it will prompt you to run setup if needed.
+
+**After setup:** Just double-click `Start Voxtral Web - Mac.command` each time.
+
+### macOS/Linux (Terminal)
 
 ```bash
 cd transcribe-voxtral-main/VoxtralApp
-```
 
-**macOS/Linux:**
-```bash
-chmod +x setup.sh
+# First time only - creates virtual environment
 ./setup.sh
-```
 
-**Windows:**
-```cmd
-python -m venv voxtral_env
-voxtral_env\Scripts\activate.bat
-pip install -r requirements.txt
-```
-
-### 2. Start the Web Application
-
-**macOS/Linux:**
-```bash
+# Start the app (every time)
 ./start_web.sh
 ```
 
-**Windows:**
+### Windows
+
 ```cmd
+cd transcribe-voxtral-main\VoxtralApp
+
+:: First time only
+python -m venv voxtral_env
+voxtral_env\Scripts\activate.bat
+pip install -r requirements.txt
+
+:: Start the app (every time)
 start_web.bat
 ```
 
-**Or manually:**
-```bash
-source voxtral_env/bin/activate  # macOS/Linux
-# OR
-voxtral_env\Scripts\activate.bat  # Windows
+### Use the App
 
-python app.py
-```
-
-### 3. Access the Application
-
-Open your browser and navigate to:
-```
-http://localhost:8000
-```
-
-### 4. Transcribe Your First File
-
-1. **Upload** - Drag and drop an audio/video file or click to browse
-2. **Select Language** - Choose the language spoken in your file
-3. **Start** - Click "Start Transcription"
-4. **Monitor** - Watch real-time progress updates
-5. **Export** - Copy to clipboard or download as text file
+1. Open `http://localhost:8000` in your browser
+2. Drag and drop an audio/video file
+3. Select the language and click "Start Transcription"
+4. Copy or download your transcript when done
 
 ## Project Structure
 

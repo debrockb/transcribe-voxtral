@@ -145,10 +145,6 @@ transcribe-voxtral-main/VoxtralApp/
 └── voxtral_env/               # Python virtual environment
 ```
 
-## Launcher Icons
-
-Need a branded icon for the macOS `.command` launcher or the Windows `.bat` shortcut? New PNG, `.icns`, and `.ico` assets live under `assets/icons/`. Follow the short walkthrough in `docs/icon-guide.md` to apply them to your preferred launcher.
-
 ## Usage Modes
 
 ### Web Interface (Recommended)

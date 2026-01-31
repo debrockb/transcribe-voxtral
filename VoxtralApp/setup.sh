@@ -1,3 +1,6 @@
+#!/bin/bash
+# Voxtral Setup Script for macOS
+
 echo "🚀 Starting project setup..."
 
 if ! command -v brew &> /dev/null; then

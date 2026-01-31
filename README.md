@@ -363,8 +363,8 @@ pip install -r requirements.txt --force-reinstall
 
 **Solutions:**
 1. Verify server is running (check terminal output)
-2. Try `http://127.0.0.1:5000` instead
-3. Check if port 5000 is in use
+2. Try `http://127.0.0.1:8000` instead
+3. Check if port 8000 is in use
 4. Check firewall settings
 
 ### Model Download Fails
@@ -434,8 +434,6 @@ flake8 . --config=.flake8
 - **[User Guide](VoxtralApp/docs/USER_GUIDE.md)** - Complete user manual
 - **[API Documentation](VoxtralApp/docs/API_DOCUMENTATION.md)** - API reference
 - **[Test Documentation](VoxtralApp/tests/README.md)** - Testing guide
-- **[Implementation Plan](VoxtralApp/IMPLEMENTATION_PLAN.md)** - Design document
-- **[CLAUDE.md](../CLAUDE.md)** - Claude Code guidance
 
 ## Dependencies
 

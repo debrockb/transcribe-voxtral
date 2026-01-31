@@ -37,9 +37,14 @@ A Flask-based web application for transcribing audio and video files using the M
 flowchart TD
     A[Web Browser<br/>HTML/CSS/JS + Socket.IO] -->|HTTP/WebSocket| B[Flask Application<br/>app.py]
     B --> C[REST API + WebSocket<br/>+ Model Selector]
-    C --> D[MLX Engine<br/>Mac M1+]
-    C --> E[Voxtral Engine<br/>CUDA/MPS/CPU]
-    C --> F[GGUF Backend<br/>Future]
+    C --> P[Audio Preprocessing<br/>FFmpeg Conversion]
+    P -->|Optional| E1[Distant Speaker<br/>Enhancement]
+    E1 --> D
+    E1 --> E
+    E1 --> F
+    P --> D[MLX Engine<br/>Mac M1+]
+    P --> E[Voxtral Engine<br/>CUDA/MPS/CPU]
+    P --> F[GGUF Backend<br/>Future]
     D --> G[MLX Models<br/>3-25 GB<br/>Apple Silicon]
     E --> H[PyTorch Models<br/>9-97 GB<br/>Any Platform]
     F --> I[GGUF Models<br/>Future<br/>CPU/GPU]

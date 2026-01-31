@@ -2202,9 +2202,12 @@ if __name__ == "__main__":
 
     # Open browser automatically after a short delay (gives server time to start)
     # Only open if not in a headless/test environment
-    if not os.environ.get("TESTING") and not os.environ.get("NO_BROWSER"):
+    # WERKZEUG_RUN_MAIN is set by Flask's reloader - only open browser in the reloader process
+    # to avoid opening twice (once in main process, once in reloader)
+    is_reloader = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
+    if not os.environ.get("TESTING") and not os.environ.get("NO_BROWSER") and is_reloader:
         def open_browser():
-            time.sleep(2)  # Wait for server to start
+            time.sleep(1)  # Short delay for server to be ready
             url = f"http://localhost:{port}"
             logger.info(f"Opening browser at {url}")
             webbrowser.open(url)

@@ -2181,15 +2181,24 @@ if __name__ == "__main__":
     # Start Flask-SocketIO server
     # Using port 8000 as port 5000 is often used by macOS AirPlay Receiver
     preferred_port = int(os.environ.get("PORT", 8000))
+    is_reloader = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
 
-    # Find an available port, starting from the preferred port
-    try:
-        port = find_available_port(preferred_port)
-        if port != preferred_port:
-            logger.info(f"Port {preferred_port} is in use, using port {port} instead")
-    except RuntimeError as e:
-        logger.error(f"Failed to find available port: {e}")
-        sys.exit(1)
+    # Only find an available port in the main process, not the reloader
+    # The main process sets VOXTRAL_PORT env var which the reloader inherits
+    if is_reloader:
+        # Reloader: use the port that was found by the main process
+        port = int(os.environ.get("VOXTRAL_PORT", preferred_port))
+    else:
+        # Main process: find an available port and set it for the reloader
+        try:
+            port = find_available_port(preferred_port)
+            if port != preferred_port:
+                logger.info(f"Port {preferred_port} is in use, using port {port} instead")
+            # Set env var so reloader uses the same port
+            os.environ["VOXTRAL_PORT"] = str(port)
+        except RuntimeError as e:
+            logger.error(f"Failed to find available port: {e}")
+            sys.exit(1)
 
     # Update CORS origins to include the actual port being used
     actual_origins = get_allowed_origins(port)
@@ -2204,7 +2213,6 @@ if __name__ == "__main__":
     # Only open if not in a headless/test environment
     # WERKZEUG_RUN_MAIN is set by Flask's reloader - only open browser in the reloader process
     # to avoid opening twice (once in main process, once in reloader)
-    is_reloader = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
     if not os.environ.get("TESTING") and not os.environ.get("NO_BROWSER") and is_reloader:
         def open_browser():
             time.sleep(1)  # Short delay for server to be ready

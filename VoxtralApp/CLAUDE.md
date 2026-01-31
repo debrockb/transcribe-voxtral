@@ -26,6 +26,7 @@ Voxtral is a Flask-based web application for audio/video transcription using the
   - Automatic language detection per chunk (SpeechBrain)
   - Audio normalization for better recognition
   - torchaudio compatibility fix for SpeechBrain
+  - **Distant Speaker Enhancement**: Optional FFmpeg filter chain (highpass, lowpass, compand, EQ boost, loudnorm) for audio recorded 5+ meters from microphone
 
 **Flask Application** (`app.py`)
 - REST API endpoints for file upload, transcription jobs, and status

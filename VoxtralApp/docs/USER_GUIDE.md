@@ -214,6 +214,26 @@ Using WebSocket technology, you see:
 - Estimated completion
 - Instant transcript display
 
+### Distant Speaker Enhancement
+
+When recording speakers who are far from the microphone (5+ meters), enable the **Distant Speaker Enhancement** checkbox in Step 2:
+
+**What it does:**
+
+- Applies audio compression to even out volume levels
+- Boosts speech frequencies (300Hz-3500Hz) for clarity
+- Normalizes loudness to professional standards (-14 LUFS)
+- Removes low-frequency rumble and high-frequency noise
+
+**When to use:**
+
+- Conference room recordings with distant speakers
+- Lectures captured from the back of a room
+- Interviews with inconsistent microphone distances
+- Any recording where speech sounds quiet or muddy
+
+**Note:** This processing adds a few seconds to the transcription time but significantly improves accuracy for distant audio.
+
 ### Device Auto-Detection
 
 The application automatically uses the best available hardware:

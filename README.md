@@ -21,6 +21,7 @@ A Flask-based web application for transcribing audio and video files using the M
 - 🔄 **Smart Chunking** - 90-second chunks optimized for multi-language content
 - 🎚️ **Audio Normalization** - Automatic volume normalization for better recognition
 - 🎯 **High Accuracy** - Powered by Mistral AI Voxtral-Mini-3B model
+- 🎙️ **[Distant Speaker Enhancement](VoxtralApp/docs/AUDIO_ENHANCEMENT.md)** - Optional FFmpeg filter chain for audio recorded 5+ meters from microphone
 
 ### Performance & Privacy
 - 🚀 **Device Auto-Detection** - MPS (Apple Silicon), CUDA (NVIDIA GPU), or CPU
@@ -118,8 +119,10 @@ start_web.bat
 
 1. Open `http://localhost:8000` in your browser
 2. Drag and drop an audio/video file
-3. Select the language and click "Start Transcription"
-4. Copy or download your transcript when done
+3. Select the language
+4. **Optional:** Enable "Distant Speaker Enhancement" if speakers are far from the mic
+5. Click "Start Transcription"
+6. Copy or download your transcript when done
 
 ## Project Structure
 
@@ -505,6 +508,31 @@ The transcription engine automatically adjusts based on available memory:
 2. **Monitor Banners** - Watch for memory warnings during processing
 3. **Restart if Needed** - Stop transcription if critical warning appears
 4. **Chunk Size** - System automatically adjusts based on available RAM
+
+## Distant Speaker Enhancement
+
+For recordings where speakers are far from the microphone (5+ meters), enable the **Distant Speaker Enhancement** checkbox before transcribing.
+
+### When to Use
+
+- Conference room recordings with distant speakers
+- Lectures captured from the back of a room
+- Interviews with inconsistent microphone distances
+- Any recording where speech sounds quiet or muddy
+
+### How It Works
+
+The enhancement applies a sophisticated FFmpeg audio filter chain:
+
+| Filter                 | Purpose                                                   |
+|------------------------|-----------------------------------------------------------|
+| **High-pass (80Hz)**   | Removes low-frequency rumble (air conditioning, traffic)  |
+| **Low-pass (8kHz)**    | Removes high-frequency hiss                               |
+| **Compand**            | Dynamic compression to bring up quiet speech              |
+| **EQ Boost**           | Boosts voice frequencies (300Hz, 1kHz, 2.5kHz, 3.5kHz)    |
+| **Loudnorm (-14 LUFS)**| Normalizes loudness to broadcast standard                 |
+
+For complete technical details, see [Audio Enhancement Documentation](VoxtralApp/docs/AUDIO_ENHANCEMENT.md).
 
 ## Versioning & Updates
 

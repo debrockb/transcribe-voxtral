@@ -73,6 +73,61 @@ def convert_to_clean_wav(input_path: str, output_path: str) -> bool:
         return False
 
 
+def enhance_audio_for_distance(input_path: str, output_path: str) -> bool:
+    """
+    Apply audio enhancement filters for distant speaker recordings.
+    Uses FFmpeg to apply compression, EQ boost, and loudness normalization.
+
+    Args:
+        input_path: Path to input audio file
+        output_path: Path for enhanced output file
+
+    Returns:
+        True if enhancement successful, False otherwise
+    """
+    try:
+        # FFmpeg filter chain for distant speaker enhancement:
+        # 1. highpass: Remove low-frequency rumble below 80Hz
+        # 2. lowpass: Remove high-frequency noise above 8kHz
+        # 3. compand: Dynamic range compression to even out volume
+        # 4. equalizer: Boost speech frequencies (300Hz, 1kHz, 2.5kHz, 3.5kHz)
+        # 5. loudnorm: Normalize loudness to -14 LUFS (broadcast standard)
+        audio_filter = (
+            "highpass=f=80,"
+            "lowpass=f=8000,"
+            "compand=attacks=0.01:decays=0.3:"
+            "points=-80/-80|-45/-35|-27/-20|-15/-10|0/-5|20/-5:"
+            "gain=8:volume=-90:delay=0.1,"
+            "equalizer=f=300:t=h:w=200:g=3,"
+            "equalizer=f=1000:t=h:w=500:g=5,"
+            "equalizer=f=2500:t=h:w=500:g=4,"
+            "equalizer=f=3500:t=h:w=500:g=2,"
+            "loudnorm=I=-14:TP=-1:LRA=11"
+        )
+
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i", input_path,
+            "-af", audio_filter,
+            "-ar", "16000",
+            "-ac", "1",
+            "-c:a", "pcm_s16le",
+            "-loglevel", "error",
+            output_path
+        ]
+
+        subprocess.run(command, check=True)
+        logger.info(f"Audio enhancement applied successfully: {output_path}")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Audio enhancement failed: {e}")
+        return False
+    except FileNotFoundError:
+        logger.error("FFmpeg not found for audio enhancement")
+        return False
+
+
 class MLXTranscriptionEngine:
     """
     Engine for transcribing audio files using the MLX-optimized Voxtral model.
@@ -244,6 +299,9 @@ class MLXTranscriptionEngine:
             try:
                 self.progress_callback(data)
             except Exception as e:
+                # Re-raise cancellation exceptions so they propagate properly
+                if "cancelled" in type(e).__name__.lower() or "cancelled" in str(e).lower():
+                    raise
                 logger.warning(f"Progress callback error: {e}")
 
     def _get_optimal_chunk_duration(self, default_duration: int = 120) -> int:
@@ -337,6 +395,7 @@ class MLXTranscriptionEngine:
         output_text_path: str,
         language: str = "en",
         chunk_duration_s: int = DEFAULT_CHUNK_DURATION_S,
+        enable_audio_enhancement: bool = False,
     ) -> Dict:
         """
         Transcribe a complete audio file with chunking using MLX.
@@ -345,17 +404,20 @@ class MLXTranscriptionEngine:
         - FFmpeg pre-conversion for complex audio/video formats
         - Audio normalization for better recognition
         - Automatic language detection per chunk (if enabled)
+        - Optional audio enhancement for distant speakers
 
         Args:
             input_audio_path: Path to input audio file
             output_text_path: Path to save transcription
             language: Language code for transcription
             chunk_duration_s: Duration of each chunk in seconds
+            enable_audio_enhancement: Apply audio enhancement for distant speakers
 
         Returns:
             Dictionary with transcription results and metadata
         """
         temp_clean_wav = None
+        temp_enhanced_wav = None
         try:
             input_path = Path(input_audio_path)
             output_path = Path(output_text_path)
@@ -377,6 +439,18 @@ class MLXTranscriptionEngine:
             else:
                 logger.warning("FFmpeg conversion failed, loading original file directly")
                 audio_to_load = str(input_path)
+
+            # Step 1.5: Apply audio enhancement for distant speakers if enabled
+            if enable_audio_enhancement:
+                self._emit_progress({"status": "enhancing", "message": "Applying distant speaker enhancement...", "progress": 3})
+                logger.info("Applying audio enhancement for distant speakers")
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as enhanced_tmp:
+                    temp_enhanced_wav = enhanced_tmp.name
+                if enhance_audio_for_distance(audio_to_load, temp_enhanced_wav):
+                    logger.info("Audio enhancement successful")
+                    audio_to_load = temp_enhanced_wav
+                else:
+                    logger.warning("Audio enhancement failed, continuing with original audio")
 
             self._emit_progress({"status": "loading_audio", "message": f"Loading audio: {input_path.name}", "progress": 5})
 
@@ -531,6 +605,12 @@ class MLXTranscriptionEngine:
                     logger.debug(f"Cleaned up temporary WAV: {temp_clean_wav}")
                 except Exception as e:
                     logger.warning(f"Failed to clean up temp file {temp_clean_wav}: {e}")
+            if temp_enhanced_wav and os.path.exists(temp_enhanced_wav):
+                try:
+                    os.remove(temp_enhanced_wav)
+                    logger.debug(f"Cleaned up enhanced WAV: {temp_enhanced_wav}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp file {temp_enhanced_wav}: {e}")
 
     def get_device_info(self) -> Dict:
         """Get information about the current device and capabilities."""

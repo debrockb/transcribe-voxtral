@@ -90,6 +90,9 @@ class GGUFWhisperBackend:
             try:
                 self.progress_callback(data)
             except Exception as e:
+                # Re-raise cancellation exceptions so they propagate properly
+                if "cancelled" in type(e).__name__.lower() or "cancelled" in str(e).lower():
+                    raise
                 logger.warning(f"Progress callback error: {e}")
 
     def _load_model(self):

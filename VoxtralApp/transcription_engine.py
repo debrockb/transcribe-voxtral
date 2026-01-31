@@ -92,6 +92,77 @@ def convert_to_clean_wav(input_path: str, output_path: str) -> bool:
         return False
 
 
+def enhance_audio_for_distance(input_path: str, output_path: str) -> bool:
+    """
+    Enhance audio for recordings where speakers are far from the microphone (5+ meters).
+
+    Applies a sophisticated FFmpeg filter chain:
+    - High-pass filter at 80Hz to remove low-frequency rumble (air conditioning, traffic)
+    - Low-pass filter at 8kHz to remove high-frequency hiss
+    - Dynamic compression to bring up quiet sounds (speech) while limiting loud sounds
+    - EQ boost at voice frequencies (300Hz, 1kHz, 2.5kHz, 3.5kHz)
+    - Loudness normalization to -14 LUFS broadcast standard
+
+    Args:
+        input_path: Path to input audio file
+        output_path: Path for enhanced output WAV file
+
+    Returns:
+        True if enhancement successful, False otherwise
+    """
+    try:
+        # Build the complex audio filter chain
+        audio_filter = (
+            # Remove low-frequency rumble (air conditioning, traffic, etc.)
+            "highpass=f=80,"
+            # Remove high-frequency hiss
+            "lowpass=f=8000,"
+            # Dynamic compression: bring up quiet sounds, limit loud sounds
+            # attacks=0.01: fast attack for transients
+            # decays=0.3: moderate decay for natural sound
+            # points: compression curve (input/output dB pairs)
+            # gain=8: 8dB makeup gain after compression
+            # volume=-90: gate threshold (silence below -90dB)
+            # delay=0.1: lookahead for smoother compression
+            "compand=attacks=0.01:decays=0.3:"
+            "points=-80/-80|-45/-35|-27/-20|-15/-10|0/-5|20/-5:"
+            "gain=8:volume=-90:delay=0.1,"
+            # EQ boost at voice frequencies
+            "equalizer=f=300:t=h:w=200:g=3,"    # Low voice fundamentals
+            "equalizer=f=1000:t=h:w=500:g=5,"   # Voice body/presence
+            "equalizer=f=2500:t=h:w=500:g=4,"   # Voice clarity
+            "equalizer=f=3500:t=h:w=500:g=2,"   # Voice brightness/intelligibility
+            # Loudness normalization to broadcast standard
+            "loudnorm=I=-14:TP=-1:LRA=11"
+        )
+
+        command = [
+            "ffmpeg",
+            "-y",  # Overwrite output
+            "-i", input_path,
+            "-af", audio_filter,
+            "-ar", "16000",  # 16kHz sample rate for speech recognition
+            "-ac", "1",  # Mono
+            "-c:a", "pcm_s16le",  # Standard WAV PCM encoding
+            "-loglevel", "error",
+            output_path,
+        ]
+
+        logger.info(f"Applying distant speaker enhancement to: {input_path}")
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        logger.info(f"Audio enhancement completed: {output_path}")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg audio enhancement failed: {e}")
+        if e.stderr:
+            logger.error(f"FFmpeg error: {e.stderr}")
+        return False
+    except FileNotFoundError:
+        logger.error("FFmpeg not found. Please install FFmpeg (brew install ffmpeg / choco install ffmpeg)")
+        return False
+
+
 class TranscriptionEngine:
     """
     Engine for transcribing audio files using multiple backends:
@@ -398,6 +469,9 @@ class TranscriptionEngine:
             try:
                 self.progress_callback(data)
             except Exception as e:
+                # Re-raise cancellation exceptions so they propagate properly
+                if "cancelled" in type(e).__name__.lower() or "cancelled" in str(e).lower():
+                    raise
                 logger.warning(f"Progress callback error: {e}")
 
     def _get_optimal_chunk_duration(self, default_duration: int = 120) -> int:
@@ -543,6 +617,7 @@ class TranscriptionEngine:
         output_text_path: str,
         language: str = "en",
         chunk_duration_s: int = DEFAULT_CHUNK_DURATION_S,
+        enable_audio_enhancement: bool = False,
     ) -> Dict:
         """
         Transcribe a complete audio file with chunking.
@@ -569,6 +644,7 @@ class TranscriptionEngine:
                 output_text_path,
                 language,
                 chunk_duration_s=GGUF_CHUNK_DURATION_S,
+                enable_audio_enhancement=enable_audio_enhancement,
             )
 
         temp_clean_wav = None
@@ -595,6 +671,30 @@ class TranscriptionEngine:
             else:
                 logger.warning("FFmpeg conversion failed, loading original file directly")
                 audio_to_load = str(input_path)
+
+            # Step 1.5: Apply distant speaker enhancement if enabled
+            if enable_audio_enhancement:
+                self._emit_progress({"status": "enhancing", "message": "Applying distant speaker enhancement...", "progress": 3})
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    temp_enhanced_wav = tmp.name
+
+                if enhance_audio_for_distance(audio_to_load, temp_enhanced_wav):
+                    logger.info("Audio enhancement successful")
+                    # Clean up intermediate file if it was the converted WAV
+                    if audio_to_load == temp_clean_wav:
+                        try:
+                            os.remove(temp_clean_wav)
+                        except Exception:
+                            pass
+                    temp_clean_wav = temp_enhanced_wav
+                    audio_to_load = temp_enhanced_wav
+                else:
+                    logger.warning("Audio enhancement failed, continuing with unconverted audio")
+                    # Clean up failed temp file
+                    try:
+                        os.remove(temp_enhanced_wav)
+                    except Exception:
+                        pass
 
             self._emit_progress({"status": "loading_audio", "message": f"Loading audio: {input_path.name}", "progress": 5})
 

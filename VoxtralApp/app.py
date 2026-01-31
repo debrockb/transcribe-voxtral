@@ -206,7 +206,7 @@ def progress_callback(job_id, data):
         socketio.emit("transcription_progress", {"job_id": job_id, **data})
 
 
-def transcribe_in_background(job_id, file_path, language, output_path, cleanup_path=None):
+def transcribe_in_background(job_id, file_path, language, output_path, cleanup_path=None, enable_audio_enhancement=False):
     """
     Background task for transcription.
 
@@ -216,6 +216,7 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
         language: Language code
         output_path: Path to write transcription
         cleanup_path: Optional path to delete after transcription (e.g., converted video WAV file)
+        enable_audio_enhancement: Whether to apply distant speaker enhancement
     """
     # Acquire lock to ensure only one transcription runs at a time
     with engine_lock:
@@ -229,7 +230,10 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
 
             # Start transcription
             result = transcription_engine.transcribe_file(
-                input_audio_path=str(file_path), output_text_path=str(output_path), language=language
+                input_audio_path=str(file_path),
+                output_text_path=str(output_path),
+                language=language,
+                enable_audio_enhancement=enable_audio_enhancement,
             )
 
             if result["status"] == "success":
@@ -779,6 +783,7 @@ def start_transcription():  # noqa: C901
     file_id = data.get("file_id")
     filename = data.get("filename")
     language = data.get("language", "en")
+    enable_audio_enhancement = data.get("enable_audio_enhancement", False)
 
     # Support both file_id and filename
     if filename and not file_id:
@@ -844,6 +849,7 @@ def start_transcription():  # noqa: C901
             "file_id": file_id,
             "filename": file_info["original_filename"],
             "language": language,
+            "enable_audio_enhancement": enable_audio_enhancement,
             "status": "queued",
             "progress": 0,
             "current_chunk": 0,
@@ -855,7 +861,7 @@ def start_transcription():  # noqa: C901
 
         # Start transcription in background thread
         thread = threading.Thread(
-            target=transcribe_in_background, args=(job_id, file_path, language, output_path, cleanup_path)
+            target=transcribe_in_background, args=(job_id, file_path, language, output_path, cleanup_path, enable_audio_enhancement)
         )
         thread.daemon = True
         thread.start()

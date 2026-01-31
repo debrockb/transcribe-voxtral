@@ -102,13 +102,15 @@ fetch('/api/upload', {
 ```json
 {
   "file_id": "uuid-string",
-  "language": "en"
+  "language": "en",
+  "enable_audio_enhancement": false
 }
 ```
 
 **Parameters:**
 - `file_id` (string, required): File ID returned from upload endpoint
 - `language` (string, optional): Language code (default: "en")
+- `enable_audio_enhancement` (boolean, optional): Enable audio processing for distant speakers (default: false). When enabled, applies compression, EQ boost, and loudness normalization to improve transcription of audio recorded from 5+ meters away.
 
 **Response (Success - 200):**
 ```json
@@ -139,7 +141,8 @@ fetch('/api/transcribe', {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
         file_id: 'abc123',
-        language: 'en'
+        language: 'en',
+        enable_audio_enhancement: true  // Optional: for distant speakers
     })
 })
 .then(response => response.json())

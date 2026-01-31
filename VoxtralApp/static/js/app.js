@@ -28,6 +28,7 @@ const elements = {
     fileType: document.getElementById('fileType'),
     removeFile: document.getElementById('removeFile'),
     languageSelect: document.getElementById('languageSelect'),
+    audioEnhancementToggle: document.getElementById('audioEnhancementToggle'),
     transcribeBtn: document.getElementById('transcribeBtn'),
     progressSection: document.getElementById('progressSection'),
     progressStatus: document.getElementById('progressStatus'),
@@ -936,6 +937,8 @@ async function startTranscription() {
         elements.transcribeBtn.disabled = true;
         elements.transcribeBtn.textContent = 'Transcribing...';
 
+        const enableAudioEnhancement = elements.audioEnhancementToggle ? elements.audioEnhancementToggle.checked : false;
+
         const response = await fetch('/api/transcribe', {
             method: 'POST',
             headers: {
@@ -944,7 +947,8 @@ async function startTranscription() {
             },
             body: JSON.stringify({
                 file_id: state.uploadedFile.file_id,
-                language: language
+                language: language,
+                enable_audio_enhancement: enableAudioEnhancement
             })
         });
 

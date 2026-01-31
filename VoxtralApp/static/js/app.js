@@ -165,6 +165,8 @@ function connectWebSocket() {
     state.socket.on('transcription_progress', handleProgressUpdate);
     state.socket.on('transcription_complete', handleTranscriptionComplete);
     state.socket.on('transcription_error', handleTranscriptionError);
+    state.socket.on('transcription_cancelled', handleTranscriptionCancelled);
+    state.socket.on('transcription_cancelling', handleTranscriptionCancelling);
     state.socket.on('memory_warning', handleMemoryWarning);
     state.socket.on('model_loading', handleModelLoading);
     state.socket.on('update_progress', handleUpdateProgress);
@@ -332,6 +334,41 @@ function handleModelLoading(data) {
 
     if (data.status === 'loading') {
         elements.modelLoadingTitle.textContent = data.message || 'Loading model...';
+    } else if (data.status === 'unloading') {
+        // Model is being unloaded
+        if (elements.modelLoadingOverlay) {
+            elements.modelLoadingOverlay.style.display = 'flex';
+            elements.modelLoadingTitle.textContent = data.message || 'Unloading model...';
+            elements.modelLoadingMessage.textContent = 'Freeing memory...';
+        }
+    } else if (data.status === 'unloaded') {
+        // Model unloaded successfully
+        state.modelLoaded = false;
+
+        // Hide loading overlay
+        if (elements.modelLoadingOverlay) {
+            elements.modelLoadingOverlay.style.display = 'none';
+        }
+
+        // Update the model badge
+        if (elements.modelBadge) {
+            elements.modelBadge.textContent = 'No model loaded';
+        }
+
+        // Hide unload and switch buttons
+        const unloadBtn = document.getElementById('unloadModelBtn');
+        const switchBtn = document.getElementById('switchModelBtn');
+        if (unloadBtn) {
+            unloadBtn.style.display = 'none';
+        }
+        if (switchBtn) {
+            switchBtn.style.display = 'none';
+        }
+
+        showToast(`${data.model} unloaded. Memory freed.`, 'success');
+
+        // Show model selection modal
+        elements.modelModal.style.display = 'flex';
     } else if (data.status === 'loaded') {
         // Model loaded successfully
         state.modelLoaded = true;
@@ -343,6 +380,16 @@ function handleModelLoading(data) {
         // Update the model badge in hero section
         if (elements.modelBadge && data.model) {
             elements.modelBadge.textContent = data.model;
+        }
+
+        // Show unload and switch buttons
+        const unloadBtn = document.getElementById('unloadModelBtn');
+        const switchBtn = document.getElementById('switchModelBtn');
+        if (unloadBtn) {
+            unloadBtn.style.display = 'inline-flex';
+        }
+        if (switchBtn) {
+            switchBtn.style.display = 'inline-flex';
         }
 
         showToast(`${data.model} loaded successfully!`, 'success');
@@ -359,6 +406,153 @@ function handleModelLoading(data) {
         elements.initializeModelBtn.disabled = false;
         elements.modelLoadingOverlay.style.display = 'none';
     }
+}
+
+/**
+ * Show the model selector modal to switch models
+ */
+function showModelSelector() {
+    // Reset the modal state
+    elements.initializeModelBtn.disabled = false;
+    elements.modelLoadingOverlay.style.display = 'none';
+
+    // Show the modal
+    elements.modelModal.style.display = 'flex';
+
+    // Refresh model list
+    loadModels();
+}
+
+/**
+ * Unload the current model to free memory
+ */
+async function unloadCurrentModel() {
+    if (!state.modelLoaded) {
+        showToast('No model is currently loaded', 'info');
+        return;
+    }
+
+    try {
+        // Show loading overlay
+        if (elements.modelLoadingOverlay) {
+            elements.modelLoadingOverlay.style.display = 'flex';
+            elements.modelLoadingTitle.textContent = 'Unloading model...';
+            elements.modelLoadingMessage.textContent = 'Freeing memory...';
+        }
+
+        const response = await fetch('/api/model/unload', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Voxtral-Request': 'voxtral-web-ui'
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to unload model');
+        }
+
+        // WebSocket will handle the UI update via handleModelLoading
+        console.log('Model unload initiated:', data);
+    } catch (error) {
+        console.error('Failed to unload model:', error);
+        showToast(`Failed to unload model: ${error.message}`, 'error');
+
+        if (elements.modelLoadingOverlay) {
+            elements.modelLoadingOverlay.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * Close the model selector modal without loading a model
+ */
+function closeModelModal() {
+    // Only allow closing if a model is already loaded
+    if (!state.modelLoaded) {
+        showToast('Please select a model to continue', 'info');
+        return;
+    }
+    elements.modelModal.style.display = 'none';
+}
+
+/**
+ * Cancel the current transcription
+ */
+async function cancelTranscription() {
+    if (!state.currentJobId) {
+        showToast('No transcription in progress', 'info');
+        return;
+    }
+
+    try {
+        const cancelBtn = document.getElementById('cancelTranscriptionBtn');
+        if (cancelBtn) {
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = 'Cancelling...';
+        }
+
+        const response = await fetch(`/api/transcribe/cancel/${state.currentJobId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Voxtral-Request': 'voxtral-web-ui'
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to cancel transcription');
+        }
+
+        console.log('Cancel requested:', data);
+    } catch (error) {
+        console.error('Failed to cancel transcription:', error);
+        showToast(`Failed to cancel: ${error.message}`, 'error');
+
+        const cancelBtn = document.getElementById('cancelTranscriptionBtn');
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = 'Cancel Transcription';
+        }
+    }
+}
+
+/**
+ * Handle transcription cancelling event
+ */
+function handleTranscriptionCancelling(data) {
+    console.log('Transcription cancelling:', data);
+    if (elements.progressStatus) {
+        elements.progressStatus.textContent = 'Cancelling...';
+    }
+    if (elements.progressDetails) {
+        elements.progressDetails.textContent = 'Stopping after current chunk...';
+    }
+}
+
+/**
+ * Handle transcription cancelled event
+ */
+function handleTranscriptionCancelled(data) {
+    console.log('Transcription cancelled:', data);
+
+    showToast('Transcription cancelled', 'info');
+
+    // Reset UI
+    elements.progressSection.style.display = 'none';
+    elements.transcribeBtn.disabled = false;
+
+    const cancelBtn = document.getElementById('cancelTranscriptionBtn');
+    if (cancelBtn) {
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = 'Cancel Transcription';
+    }
+
+    state.currentJobId = null;
 }
 
 // Memory Monitoring Functions

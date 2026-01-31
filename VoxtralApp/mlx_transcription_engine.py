@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 
 import librosa
+import mlx.core as mx
 import numpy as np
 import psutil
 import soundfile as sf
@@ -299,16 +300,20 @@ class MLXTranscriptionEngine:
             if sr != 16000:
                 audio_np = librosa.resample(audio_np, orig_sr=sr, target_sr=16000)
 
-            # Process with MLX processor
-            inputs = self.processor(
+            # Use apply_transcrition_request to properly format input with language tag
+            # Note: method name has typo "transcrition" in mlx-voxtral package
+            inputs = self.processor.apply_transcrition_request(
                 audio=audio_np,
-                sampling_rate=16000,
                 language=language,
-                return_tensors="mlx"
+                sampling_rate=16000
             )
 
-            # Generate transcription
-            outputs = self.model.generate(**inputs, max_new_tokens=2048)
+            # Generate transcription - inputs contains both input_ids and input_features
+            outputs = self.model.generate(
+                input_ids=inputs.input_ids,
+                input_features=inputs.input_features,
+                max_new_tokens=2048
+            )
 
             # Decode the output
             transcription = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]

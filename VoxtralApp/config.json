@@ -1,6 +1,6 @@
 {
   "model": {
-    "version": "full",
+    "version": "mlx-small-24b-8bit",
     "available_models": {
       "full": {
         "id": "mistralai/Voxtral-Mini-3B-2507",
@@ -93,125 +93,23 @@
           "load_time": "< 2 minutes on Apple Silicon"
         }
       },
-      "whisper-base-gguf": {
-        "id": "whisper-base",
-        "name": "Whisper Base (GGUF)",
-        "size_gb": 0.14,
-        "format": "gguf",
-        "quantization": null,
-        "backend": "gguf",
-        "gguf_filename": "ggml-base.bin",
-        "description": "Whisper Base via llama.cpp - Fast, lightweight, ~74MB model. Good for quick transcriptions.",
+      "mlx-small-24b-8bit": {
+        "id": "mzbac/Voxtral-Small-24B-2507-8bit",
+        "name": "Voxtral Small 24B MLX (8-bit)",
+        "size_gb": 25.0,
+        "format": "mlx",
+        "quantization": "8bit",
+        "backend": "mlx",
+        "platform": "mac",
+        "description": "MLX-optimized 24B model (8-bit) for Apple Silicon - Best quality, requires 64GB+ unified memory",
         "memory_requirements": {
-          "disk": "142 MB",
-          "ram_loading": "~300 MB",
-          "ram_inference": "~200 MB",
-          "load_time_cpu": "< 5 seconds"
-        }
-      },
-      "whisper-small-gguf": {
-        "id": "whisper-small",
-        "name": "Whisper Small (GGUF)",
-        "size_gb": 0.47,
-        "format": "gguf",
-        "quantization": null,
-        "backend": "gguf",
-        "gguf_filename": "ggml-small.bin",
-        "description": "Whisper Small via llama.cpp - Good balance of speed and accuracy. ~244MB model.",
-        "memory_requirements": {
-          "disk": "466 MB",
-          "ram_loading": "~800 MB",
-          "ram_inference": "~500 MB",
-          "load_time_cpu": "< 10 seconds"
-        }
-      },
-      "whisper-medium-gguf": {
-        "id": "whisper-medium",
-        "name": "Whisper Medium (GGUF)",
-        "size_gb": 1.42,
-        "format": "gguf",
-        "quantization": null,
-        "backend": "gguf",
-        "gguf_filename": "ggml-medium.bin",
-        "description": "Whisper Medium via llama.cpp - Higher accuracy, moderate resource usage. ~769MB model.",
-        "memory_requirements": {
-          "disk": "1.42 GB",
-          "ram_loading": "~2 GB",
-          "ram_inference": "~1.5 GB",
-          "load_time_cpu": "< 30 seconds"
-        }
-      },
-      "whisper-large-v3-gguf": {
-        "id": "whisper-large-v3",
-        "name": "Whisper Large v3 (GGUF)",
-        "size_gb": 2.87,
-        "format": "gguf",
-        "quantization": null,
-        "backend": "gguf",
-        "gguf_filename": "ggml-large-v3.bin",
-        "description": "Whisper Large v3 via llama.cpp - Best accuracy, requires more resources. ~1.5GB model.",
-        "memory_requirements": {
-          "disk": "2.87 GB",
-          "ram_loading": "~4 GB",
-          "ram_inference": "~3 GB",
-          "load_time_cpu": "~1 minute"
-        }
-      },
-      "whisper-large-v3-turbo-gguf": {
-        "id": "whisper-large-v3-turbo",
-        "name": "Whisper Large v3 Turbo (GGUF)",
-        "size_gb": 1.56,
-        "format": "gguf",
-        "quantization": null,
-        "backend": "gguf",
-        "gguf_filename": "ggml-large-v3-turbo.bin",
-        "description": "Whisper Large v3 Turbo via llama.cpp - Fast and accurate, distilled model. ~809MB.",
-        "memory_requirements": {
-          "disk": "1.56 GB",
-          "ram_loading": "~2.5 GB",
-          "ram_inference": "~2 GB",
-          "load_time_cpu": "< 30 seconds"
-        }
-      },
-      "mac-24gb": {
-        "id": "mistralai/Voxtral-Mini-3B-2507",
-        "name": "Voxtral Mini 3B (Mac 24GB)",
-        "size_gb": 9.36,
-        "format": "safetensors",
-        "quantization": null,
-        "backend": "voxtral",
-        "device_preference": "mps",
-        "description": "Optimized for Apple Silicon Macs with 24GB unified memory - Uses Metal Performance Shaders for fast inference",
-        "memory_requirements": {
-          "disk": "9.36 GB",
-          "ram_loading": "12-16 GB unified memory",
-          "ram_inference": "10-12 GB unified memory",
-          "load_time": "2-5 minutes on Apple Silicon"
-        },
-        "platform": "mac"
-      },
-      "mac-64gb-large": {
-        "id": "mistralai/Voxtral-24B-2507",
-        "name": "Voxtral 24B (Mac Large)",
-        "size_gb": 48.0,
-        "format": "safetensors",
-        "quantization": null,
-        "backend": "voxtral",
-        "device_preference": "mps",
-        "description": "Large 24B model for high-end Macs - Requires 64GB+ unified memory (M2 Max/Ultra, M3 Max/Ultra)",
-        "memory_requirements": {
-          "disk": "48 GB",
-          "ram_loading": "64-96 GB unified memory",
-          "ram_inference": "50-60 GB unified memory",
+          "disk": "25 GB",
+          "ram_loading": "50-60 GB unified memory",
+          "ram_inference": "45-55 GB unified memory",
           "load_time": "5-10 minutes on Apple Silicon"
-        },
-        "platform": "mac"
+        }
       }
     }
-  },
-  "gguf": {
-    "models_dir": "~/.cache/whisper-gguf",
-    "download_url_base": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
   },
   "app": {
     "version": "1.1.13",

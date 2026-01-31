@@ -28,6 +28,13 @@ from werkzeug.utils import secure_filename
 
 from config_manager import config
 from transcription_engine import TranscriptionEngine
+
+# MLX backend for Apple Silicon (imported conditionally)
+try:
+    from mlx_transcription_engine import MLXTranscriptionEngine
+    MLX_AVAILABLE = True
+except ImportError:
+    MLX_AVAILABLE = False
 from update_checker import check_for_updates, get_current_version
 
 # Configuration
@@ -132,9 +139,23 @@ def convert_video_to_audio(video_path, output_audio_path):
         return False
 
 
+class TranscriptionCancelled(Exception):
+    """Exception raised when a transcription is cancelled."""
+    pass
+
+
 def progress_callback(job_id, data):
     """Callback function for transcription progress updates."""
     if job_id in jobs:
+        # Check if job was cancelled
+        if jobs[job_id].get("cancelled"):
+            jobs[job_id]["status"] = "cancelled"
+            socketio.emit("transcription_cancelled", {
+                "job_id": job_id,
+                "message": "Transcription cancelled by user"
+            })
+            raise TranscriptionCancelled(f"Job {job_id} was cancelled")
+
         jobs[job_id].update(data)
 
         # Emit progress via WebSocket
@@ -193,6 +214,11 @@ def transcribe_in_background(job_id, file_path, language, output_path, cleanup_p
                 jobs[job_id].update({"status": "error", "error": result.get("error", "Unknown error")})
 
                 socketio.emit("transcription_error", {"job_id": job_id, "error": result.get("error", "Unknown error")})
+
+        except TranscriptionCancelled:
+            logger.info(f"Transcription cancelled for job {job_id}")
+            jobs[job_id].update({"status": "cancelled"})
+            # Cancelled event already emitted in progress_callback
 
         except Exception as e:
             error_msg = str(e)
@@ -325,14 +351,30 @@ def get_model_status():
 
 @app.route("/api/model/initialize", methods=["POST"])
 def initialize_model():
-    """Initialize model with selected version."""
-    global engine_loading
+    """Initialize model with selected version. If a model is already loaded, it will be unloaded first."""
+    global transcription_engine, engine_loading
 
+    # If model already loaded, unload it first
     if transcription_engine:
-        return (
-            jsonify({"status": "error", "message": "Model already loaded. Please reload the application to change models."}),
-            400,
-        )
+        # Check if a transcription is currently running
+        if not engine_lock.acquire(blocking=False):
+            return (
+                jsonify({"status": "error", "message": "Cannot switch models while a transcription is in progress."}),
+                409,
+            )
+        engine_lock.release()
+
+        logger.info("Unloading existing model before loading new one...")
+        socketio.emit("model_loading", {"status": "unloading", "message": "Unloading current model..."})
+
+        # Unload current model
+        transcription_engine = None
+        gc.collect()
+        try:
+            import mlx.core as mx
+            mx.metal.clear_cache()
+        except (ImportError, AttributeError):
+            pass
 
     if engine_loading:
         return jsonify({"status": "error", "message": "Model is currently loading. Please wait."}), 409
@@ -491,6 +533,91 @@ def switch_model():
         engine_loading = False
         logger.error(f"Failed to switch model: {e}")
         return error_response(f"Failed to switch model: {str(e)}", 500)
+
+
+@app.route("/api/model/unload", methods=["POST"])
+def unload_model():
+    """
+    Unload the current model to free memory.
+
+    Does not load a new model - use /api/model/initialize to load a new model afterwards.
+
+    SECURITY: Protected by custom header validation to prevent CSRF attacks.
+    """
+    global transcription_engine, engine_loading
+
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return error_response("Forbidden: Invalid request origin", 403)
+
+    # Check if a transcription is currently running
+    if not engine_lock.acquire(blocking=False):
+        return error_response(
+            "Cannot unload model while a transcription is in progress. Please wait for it to complete.",
+            409,
+        )
+    engine_lock.release()
+
+    # Check if model is currently loading
+    if engine_loading:
+        return error_response("Model is currently loading. Please wait.", 409)
+
+    # Check if there's a model to unload
+    if transcription_engine is None:
+        return success_response({"unloaded": False}, "No model is currently loaded.")
+
+    try:
+        current_version = config.get("model.version", "unknown")
+        current_config = config.get_model_config()
+        current_name = current_config.get("name", "Unknown") if current_config else "Unknown"
+
+        logger.info(f"Unloading current model ({current_name})...")
+        socketio.emit(
+            "model_loading",
+            {"status": "unloading", "model": current_name, "message": f"Unloading {current_name}..."},
+        )
+
+        # Clear the engine reference
+        transcription_engine = None
+
+        # Force garbage collection to free memory
+        gc.collect()
+
+        # Clear GPU/MPS cache if available
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                logger.info("CUDA cache cleared")
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                logger.info("MPS memory cleanup triggered via gc.collect")
+        except ImportError:
+            pass
+
+        # For MLX, trigger additional cleanup
+        try:
+            import mlx.core as mx
+            mx.metal.clear_cache()
+            logger.info("MLX Metal cache cleared")
+        except (ImportError, AttributeError):
+            pass
+
+        logger.info(f"Model '{current_name}' unloaded successfully")
+
+        socketio.emit(
+            "model_loading",
+            {"status": "unloaded", "model": current_name, "message": f"{current_name} unloaded successfully!"},
+        )
+
+        return success_response(
+            {"unloaded": True, "previous_model": current_name, "previous_version": current_version},
+            f"Model '{current_name}' unloaded successfully. Memory freed.",
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to unload model: {e}")
+        return error_response(f"Failed to unload model: {str(e)}", 500)
 
 
 @app.route("/api/upload", methods=["POST"])
@@ -679,6 +806,7 @@ def start_transcription():  # noqa: C901
             "total_chunks": 0,
             "started_at": datetime.now().isoformat(),
             "output_path": str(output_path),
+            "cancelled": False,  # Flag for cancellation
         }
 
         # Start transcription in background thread
@@ -704,6 +832,45 @@ def get_status(job_id):
         return jsonify({"status": "error", "message": "Job not found"}), 404
 
     return jsonify(jobs[job_id])
+
+
+@app.route("/api/transcribe/cancel/<job_id>", methods=["POST"])
+def cancel_transcription(job_id):
+    """
+    Cancel a running transcription job.
+
+    Sets the cancelled flag which will be checked by the transcription engine
+    and stops processing after the current chunk completes.
+    """
+    # Validate CSRF protection
+    if not validate_csrf_protection():
+        return error_response("Forbidden: Invalid request origin", 403)
+
+    if job_id not in jobs:
+        return error_response("Job not found", 404)
+
+    job = jobs[job_id]
+
+    # Check if job is in a cancellable state
+    if job["status"] in ["complete", "error", "cancelled"]:
+        return error_response(f"Cannot cancel job with status: {job['status']}", 400)
+
+    # Set cancelled flag
+    job["cancelled"] = True
+    job["status"] = "cancelling"
+
+    logger.info(f"Cancellation requested for job {job_id}")
+
+    # Emit cancellation event
+    socketio.emit("transcription_cancelling", {
+        "job_id": job_id,
+        "message": "Cancellation requested. Stopping after current chunk..."
+    })
+
+    return success_response(
+        {"job_id": job_id, "status": "cancelling"},
+        "Cancellation requested. The job will stop after the current chunk completes."
+    )
 
 
 @app.route("/api/transcript/<job_id>", methods=["GET"])
@@ -1903,14 +2070,23 @@ def initialize_engine(model_version=None):
         model_name = model_config.get("name", "Unknown")
         quantization = model_config.get("quantization")
 
+        backend = model_config.get("backend", "voxtral")
         logger.info(f"Initializing transcription engine with model: {model_name} ({model_id})")
+        logger.info(f"Backend: {backend}")
         if quantization:
             logger.info(f"Using {quantization} quantization")
 
         # Emit loading progress via WebSocket
         socketio.emit("model_loading", {"status": "loading", "model": model_name, "message": f"Loading {model_name}..."})
 
-        transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
+        # Use MLX backend for Apple Silicon when specified
+        if backend == "mlx":
+            if not MLX_AVAILABLE:
+                raise ImportError("MLX backend requested but mlx-voxtral not installed. Install with: pip install git+https://github.com/mzbac/mlx.voxtral.git")
+            logger.info("Using MLX backend for Apple Silicon")
+            transcription_engine = MLXTranscriptionEngine(model_id=model_id)
+        else:
+            transcription_engine = TranscriptionEngine(model_id=model_id, quantization=quantization)
 
         # Save the selected model version to config
         if model_version:

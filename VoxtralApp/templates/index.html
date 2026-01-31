@@ -47,7 +47,7 @@
                 <img src="{{ url_for('static', filename='img/voxtral-icon.svg') }}" alt="Voxtral icon">
             </div>
             <div class="hero-copy">
-                <p class="hero-eyebrow">Simply Bastiaan · Local-first transcription</p>
+                <p class="hero-eyebrow">Voxtral · Local-first transcription</p>
                 <h1>Need privacy proof? Every file stays on this device.</h1>
                 <p class="hero-body">
                     Voxtral keeps recordings, processing, and transcripts on your hardware. Nothing leaves your
@@ -55,6 +55,12 @@
                 </p>
                 <div class="hero-facts">
                     <span class="fact-pill accent" id="modelBadge">Select a model</span>
+                    <button class="fact-pill model-action-btn" id="unloadModelBtn" onclick="unloadCurrentModel()" style="display: none;" title="Unload model to free memory">
+                        Unload Model
+                    </button>
+                    <button class="fact-pill model-action-btn" id="switchModelBtn" onclick="showModelSelector()" style="display: none;" title="Switch to a different model">
+                        Switch Model
+                    </button>
                     <span class="fact-pill">Audio &amp; video ready</span>
                     <span class="fact-pill" id="deviceBadge">Running on <strong id="deviceName">{{ device_info.device_name or 'CPU' }}</strong></span>
                 </div>
@@ -140,6 +146,9 @@
                         <div class="progress-details" id="progressDetails">Waiting to start...</div>
                         <div class="progress-eta" id="progressEta"></div>
                     </div>
+                    <button class="btn-cancel" id="cancelTranscriptionBtn" onclick="cancelTranscription()">
+                        Cancel Transcription
+                    </button>
                 </div>
             </section>
 
@@ -195,8 +204,7 @@
         <!-- Footer -->
         <footer class="footer">
             <p>
-                Crafted with ❤️ by Simply Bastiaan | Powered by <strong>Mistral AI Voxtral-Mini-3B</strong> |
-                <a href="https://www.simplybastiaan.com/" target="_blank" rel="noreferrer">simplybastiaan.com</a>
+                Powered by <strong>Mistral AI Voxtral-Mini-3B</strong> | 100% Local Processing
             </p>
         </footer>
     </div>
@@ -253,6 +261,7 @@
     <div class="model-modal" id="modelModal" style="display: none;">
         <div class="model-modal-backdrop"></div>
         <div class="model-modal-content">
+            <button class="modal-close-btn" id="closeModelModalBtn" onclick="closeModelModal()" title="Close">&times;</button>
             <div class="model-modal-header">
                 <h2>Choose Your Model</h2>
                 <p class="model-modal-subtitle">Select which Voxtral model to use for transcription</p>

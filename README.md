@@ -33,38 +33,64 @@ A Flask-based web application for transcribing audio and video files using the M
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Web Browser                        │
-│          (HTML/CSS/JavaScript + Socket.IO)          │
-└──────────────────┬──────────────────────────────────┘
-                   │ HTTP/WebSocket
-┌──────────────────▼──────────────────────────────────┐
-│              Flask Application                       │
-│  ┌─────────────────────────────────────────────┐   │
-│  │      REST API + WebSocket (app.py)          │   │
-│  └──────────┬──────────────────────────────────┘   │
-│             │                                        │
-│  ┌──────────▼──────────────────────────────────┐   │
-│  │   TranscriptionEngine (transcription_       │   │
-│  │        engine.py)                            │   │
-│  │  • Model loading & device detection          │   │
-│  │  • Audio chunking & processing               │   │
-│  │  • Progress callbacks                        │   │
-│  └──────────┬──────────────────────────────────┘   │
-└─────────────┼──────────────────────────────────────┘
-              │
-┌─────────────▼──────────────────────────────────────┐
-│       Mistral AI Voxtral-Mini-3B Model             │
-│            (~20GB, cached locally)                  │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        Web Browser                               │
+│               (HTML/CSS/JavaScript + Socket.IO)                  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTP/WebSocket
+┌────────────────────────────▼────────────────────────────────────┐
+│                     Flask Application (app.py)                   │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              REST API + WebSocket + Model Selector          │ │
+│  └────────────────────────────┬───────────────────────────────┘ │
+│                               │                                  │
+│         ┌─────────────────────┼─────────────────────┐           │
+│         │                     │                     │           │
+│  ┌──────▼──────┐    ┌────────▼────────┐    ┌──────▼──────┐     │
+│  │ MLX Engine  │    │ Voxtral Engine  │    │GGUF Backend │     │
+│  │  (Mac M1+)  │    │(CUDA/MPS/CPU)   │    │  (Future)   │     │
+│  └──────┬──────┘    └────────┬────────┘    └──────┬──────┘     │
+└─────────┼────────────────────┼────────────────────┼────────────┘
+          │                    │                    │
+┌─────────▼──────┐  ┌─────────▼──────┐  ┌─────────▼──────┐
+│  MLX Models    │  │ PyTorch Models │  │  GGUF Models   │
+│  (3-25 GB)     │  │  (9-97 GB)     │  │   (Future)     │
+│  Apple Silicon │  │  Any Platform  │  │   CPU/GPU      │
+└────────────────┘  └────────────────┘  └────────────────┘
 ```
+
+## Available Models
+
+| Model | Size | Platform | RAM Required | Load Time | Best For |
+|-------|------|----------|--------------|-----------|----------|
+| **MLX Mini 3B (4-bit)** | 3.2 GB | Mac M1/M2/M3/M4 | 4-5 GB | < 1 min | ⭐ Recommended for Mac |
+| **MLX Mini 3B (8-bit)** | 5.3 GB | Mac M1/M2/M3/M4 | 6-7 GB | < 2 min | Better quality on Mac |
+| **MLX Small 24B (8-bit)** | 25 GB | Mac (64GB+ RAM) | 50-60 GB | 5-10 min | Best quality on Mac |
+| **Voxtral Mini 3B (Full)** | 9.4 GB | Any (CUDA/MPS/CPU) | 20-30 GB | 10-30 min | Cross-platform |
+| **Voxtral Mini 3B (4-bit)** | 9.4 GB | NVIDIA GPU | 5-8 GB | 2-5 min | NVIDIA GPU users |
+| **Voxtral Small 24B (Full)** | 97 GB | GPU (55GB+ VRAM) | 55+ GB | N/A | Enterprise GPUs |
+| **Voxtral Small 24B (4-bit)** | 97 GB | NVIDIA (16GB+) | 16-20 GB | 5-10 min | High-end NVIDIA |
+
+### Model Selection Guide
+
+**Apple Silicon Mac (M1/M2/M3/M4):**
+- 8-16 GB RAM → MLX Mini 3B (4-bit) ⭐
+- 16-32 GB RAM → MLX Mini 3B (8-bit)
+- 64+ GB RAM → MLX Small 24B (8-bit)
+
+**NVIDIA GPU:**
+- 8 GB VRAM → Voxtral Mini 3B (4-bit)
+- 16+ GB VRAM → Voxtral Small 24B (4-bit)
+
+**CPU Only (Windows/Linux):**
+- Voxtral Mini 3B (Full) - slow but works
 
 ## Requirements
 
 - **Python 3.11 or later**
 - **Operating System:** macOS, Linux, or Windows
-- **Disk Space:** 20GB+ for initial model download
-- **RAM:** 8GB+ (16GB+ recommended for optimal performance)
+- **Disk Space:** 3-25 GB depending on model (see table above)
+- **RAM:** 4-60 GB depending on model (see table above)
 - **Internet:** Required for initial model download only
 
 ### Required

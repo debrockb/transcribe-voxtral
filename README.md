@@ -87,35 +87,30 @@ flowchart TD
 
 ## Quick Start
 
-### macOS (Easiest)
+### Easiest (Double-Click)
 
-**First time:** Double-click `Start Voxtral Web - Mac.command` - it will prompt you to run setup if needed.
+| Platform    | First Time                                       | After Setup              |
+|-------------|--------------------------------------------------|--------------------------|
+| **macOS**   | Double-click `Start Voxtral Web - Mac.command`   | Same - just double-click |
+| **Windows** | Double-click `Start Voxtral Web - Windows.bat`   | Same - just double-click |
 
-**After setup:** Just double-click `Start Voxtral Web - Mac.command` each time.
+Both launchers will prompt you to run setup if needed on first use.
 
-### macOS/Linux (Terminal)
+### Terminal (Alternative)
+
+**macOS/Linux:**
 
 ```bash
 cd transcribe-voxtral-main/VoxtralApp
-
-# First time only - creates virtual environment
-./setup.sh
-
-# Start the app (every time)
-./start_web.sh
+./setup.sh           # First time only
+./start_web.sh       # Start the app
 ```
 
-### Windows
+**Windows:**
 
 ```cmd
 cd transcribe-voxtral-main\VoxtralApp
-
-:: First time only
-python -m venv voxtral_env
-voxtral_env\Scripts\activate.bat
-pip install -r requirements.txt
-
-:: Start the app (every time)
+python -m venv voxtral_env && voxtral_env\Scripts\activate.bat && pip install -r requirements.txt
 start_web.bat
 ```
 

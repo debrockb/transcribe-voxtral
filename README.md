@@ -565,12 +565,7 @@ For issues or questions:
 
 ## Acknowledgments
 
-Powered by:
-- **Mistral AI** - Voxtral-Mini-3B model
-- **HuggingFace** - Transformers library
-- **Flask** - Web framework
-- **LibROSA** - Audio processing
-- **Socket.IO** - Real-time communications
+Powered by [Mistral AI Voxtral](https://huggingface.co/mistralai/Voxtral-Mini-3B-2507) and [MLX](https://github.com/ml-explore/mlx).
 
 ---
 

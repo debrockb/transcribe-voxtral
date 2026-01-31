@@ -32,34 +32,16 @@ A Flask-based web application for transcribing audio and video files using the M
 
 ## Architecture
 
-```
-                    +---------------------------+
-                    |       Web Browser         |
-                    | (HTML/CSS/JS + Socket.IO) |
-                    +-------------+-------------+
-                                  |
-                           HTTP/WebSocket
-                                  |
-                    +-------------v-------------+
-                    |   Flask Application       |
-                    |        (app.py)           |
-                    |                           |
-                    |  REST API + WebSocket     |
-                    |  + Model Selector         |
-                    +--+----------+----------+--+
-                       |          |          |
-          +------------+    +-----+-----+    +------------+
-          |                 |           |                 |
-+---------v---------+  +----v----+  +---v-----------+
-|    MLX Engine     |  | Voxtral |  | GGUF Backend  |
-|    (Mac M1+)      |  | Engine  |  |   (Future)    |
-+--------+----------+  +----+----+  +-------+-------+
-         |                  |               |
-+--------v----------+  +----v--------+  +---v-----------+
-|    MLX Models     |  |   PyTorch   |  |  GGUF Models  |
-|    (3-25 GB)      |  |   Models    |  |   (Future)    |
-|   Apple Silicon   |  |  (9-97 GB)  |  |   CPU/GPU     |
-+-------------------+  +-------------+  +---------------+
+```mermaid
+flowchart TD
+    A[Web Browser<br/>HTML/CSS/JS + Socket.IO] -->|HTTP/WebSocket| B[Flask Application<br/>app.py]
+    B --> C[REST API + WebSocket<br/>+ Model Selector]
+    C --> D[MLX Engine<br/>Mac M1+]
+    C --> E[Voxtral Engine<br/>CUDA/MPS/CPU]
+    C --> F[GGUF Backend<br/>Future]
+    D --> G[MLX Models<br/>3-25 GB<br/>Apple Silicon]
+    E --> H[PyTorch Models<br/>9-97 GB<br/>Any Platform]
+    F --> I[GGUF Models<br/>Future<br/>CPU/GPU]
 ```
 
 ## Available Models
